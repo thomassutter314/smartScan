@@ -42,6 +42,8 @@ plt.switch_backend('agg')
 
 import numpy as np
 import scipy
+from scipy import fft
+from scipy.ndimage import median_filter
 import time
 import datetime
 import threading
@@ -50,9 +52,13 @@ import tifffile
 import json
 import os
 import io
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
-from PyPDF2 import PdfMerger
+import PySpin
+import sys
+import clr
+from clr import System
+full_filename = r'C:\Windows\Microsoft.NET\assembly\GAC_64\Newport.DLS.CommandInterface\v4.0_1.0.1.0__90ac4f829985d2bf\Newport.DLS.CommandInterface.dll'
+clr.AddReference(full_filename)
+from CommandInterfaceDLS import *
 
 import translationcorr as tc
 
@@ -72,7 +78,7 @@ def parsePosStr(s):
         print(s)
         
     dsPositions.sort()
-    dsPositions = np.unique(dsPositions)
+    dsPositions_unique = np.unique(dsPositions.round(4)) # rounds the values to 4 decimal places and removes duplicate positions
     
     
     print(dsPositions)
@@ -187,47 +193,432 @@ class RoiRectangle():
         tl_y = self.cy - self.h/2
         self.patch = patches.Rectangle((tl_x, tl_y), self.w, self.h, linewidth=1, edgecolor='r', facecolor='none', alpha=0.8)
         ax.add_patch(self.patch) # Add the patch to the axis
+
+class DelayStage():    
+    def __init__(self):
+        #import System
+        instrument = "COM11"
+        self.myDLS = DLS()
+        result = self.myDLS.OpenInstrument(instrument)
+        print('OpenInstrument error status (0 is success): ', result)
+        # Get current position and print it
+        self.pos, self.errorStatus = 0, ''
+        self.pos = self.myDLS.PA_Get(self.pos, self.errorStatus)[1]
+        print('pos = %s' % str(self.pos))
+   
+    def disconnect(self):
+        # Close the instrument
+        result = self.myDLS.CloseInstrument()
+        if result == 0:
+            print('Closing instrument')
+        else:
+            print('Failed to close instrument')
+    def getPos(self):
+        self.pos = self.myDLS.PA_Get(self.pos, self.errorStatus)[1]
+        #print('pos = %s' % str(self.pos))
+        return self.pos
+    def setPos(self,newPos):
+        if (newPos > 0) and (newPos < 225):
+            self.myDLS.PA_Set(newPos,self.errorStatus)
+            #self.pos = newPos
+        else:
+            print('Invalid Input Position; DS motion denied')
         
 class Camera():
-    #SCAF
-    def __init__(self,exposure=1,gain=30):
-        self.exposure = exposure
-        self.gain = gain
-    def setExposure(self, exposure):
-        self.exposure = exposure
-    def setGain(self, gain):
-        self.gain = gain
-    def collectImage(self):
-        # ~ x, y = np.linspace(-3,3,3072), np.linspace(-3,3,2048)
-        x, y = np.linspace(-5,3,500), np.linspace(-3,3,333)
-        X, Y = np.meshgrid(x,y)
-        a, b = 0.1*np.random.random(2)
-        camImage = 5000*np.exp(-((X-a)**2/4+(Y-b)**2)/.025)
-        #camImage += np.array(10*(np.random.random(np.shape(camImage))),dtype=np.uint16)
-        camImage = camImage.astype(np.uint16)
-        return camImage
+    def __init__(self):
+        # Retrieve singleton reference to system object
+        self.system = PySpin.System.GetInstance()
+        
+        # Get current library version
+        version = self.system.GetLibraryVersion()
+        print('Library version: %d.%d.%d.%d' % (version.major, version.minor, version.type, version.build))
+        
+        # Retrieve list of cameras from the system
+        self.cam_list = self.system.GetCameras()
+        num_cams = self.cam_list.GetSize()
+        print('Number of cameras detected: %i' % num_cams)
+        
+        # Finish if there are no cameras
+        if num_cams == 0:
+            # Clear camera list before releasing system
+            self.cam_list.Clear()
+            # Release system instance
+            self.system.ReleaseInstance()
+            print('Not enough cameras!')
+            self.cam = None
+        else:
+            self.cam = self.cam_list[0]
+            
 
-class DelayStage():
-    def __init__(self, dsPos=0):
-        self.dsPos = dsPos
-    def setPos(self, dsPos):
-        self.dsPos = dsPos
-        print(f'dspos = {self.dsPos}')
+        try:
+            # Initialize camera
+            self.cam.Init()
+            # Retrieve GenICam nodemap
+            self.nodemap = self.cam.GetNodeMap()
+            self.nodemap_tldevice = self.cam.GetTLDeviceNodeMap()
+        except PySpin.SpinnakerException as ex:
+            print('Error: %s' % ex)
+            
+        self.continue_recording = False
+        self.exposure = self.cam.ExposureTime.GetValue()/1e6 # Division by 1e6 to convert from us to s
+        self.gain = self.cam.Gain.GetValue()
+        #print('Exposure = %s s' % self.exposure)
+        #print('Gain = %s dB' % self.gain)
+            
+    def disconnect(self):
+        
+        # Deinitialize camera
+        self.cam.DeInit()
+        
+        # Release reference to camera
+        del self.cam
+    
+        # Clear camera list before releasing system
+        self.cam_list.Clear()
+    
+        # Release system instance
+        self.system.ReleaseInstance()
+        
+    def handle_close(evt):
+        """
+        This function will close the GUI when close event happens.
+    
+        :param evt: Event that occurs when the figure closes.
+        :type evt: Event
+        """
+        self.continue_recording = False
+        
+    def liveAcquire(self):
+        self.continue_recording = True
+        # Acquire images continuously and display
+
+        ### result &= acquire_and_display_images(cam, nodemap, nodemap_tldevice)
+        
+        sNodemap = self.cam.GetTLStreamNodeMap()
+        
+        # Change bufferhandling mode to NewestOnly
+        node_bufferhandling_mode = PySpin.CEnumerationPtr(sNodemap.GetNode('StreamBufferHandlingMode'))
+        if not PySpin.IsAvailable(node_bufferhandling_mode) or not PySpin.IsWritable(node_bufferhandling_mode):
+            print('Unable to set stream buffer handling mode.. Aborting...')
+            return False
+            
+        # Retrieve entry node from enumeration node
+        node_newestonly = node_bufferhandling_mode.GetEntryByName('NewestOnly')
+        if not PySpin.IsAvailable(node_newestonly) or not PySpin.IsReadable(node_newestonly):
+            print('Unable to set stream buffer handling mode.. Aborting...')
+            return False
+            
+        # Retrieve integer value from entry node
+        node_newestonly_mode = node_newestonly.GetValue()
+        
+        # Set integer value from entry node as new value of enumeration node
+        node_bufferhandling_mode.SetIntValue(node_newestonly_mode)
+        
+        try:
+            node_acquisition_mode = PySpin.CEnumerationPtr(self.nodemap.GetNode('AcquisitionMode'))
+            if not PySpin.IsAvailable(node_acquisition_mode) or not PySpin.IsWritable(node_acquisition_mode):
+                print('Unable to set acquisition mode to continuous (enum retrieval). Aborting...')
+                return False
+    
+            # Retrieve entry node from enumeration node
+            node_acquisition_mode_continuous = node_acquisition_mode.GetEntryByName('Continuous')
+            if not PySpin.IsAvailable(node_acquisition_mode_continuous) or not PySpin.IsReadable(
+                    node_acquisition_mode_continuous):
+                print('Unable to set acquisition mode to continuous (entry retrieval). Aborting...')
+                return False
+                
+            # Retrieve integer value from entry node
+            acquisition_mode_continuous = node_acquisition_mode_continuous.GetValue()
+    
+            # Set integer value from entry node as new value of enumeration node
+            node_acquisition_mode.SetIntValue(acquisition_mode_continuous)
+    
+            print('Acquisition mode set to continuous...')
+    
+            #  Begin acquiring images
+            #
+            #  *** NOTES ***
+            #  What happens when the camera begins acquiring images depends on the
+            #  acquisition mode. Single frame captures only a single image, multi
+            #  frame catures a set number of images, and continuous captures a
+            #  continuous stream of images.
+            #
+            #  *** LATER ***
+            #  Image acquisition must be ended when no more images are needed.
+            self.cam.BeginAcquisition()
+                        
+            print('Acquiring images...')
+    
+            #  Retrieve device serial number for filename
+            #
+            #  *** NOTES ***
+            #  The device serial number is retrieved in order to keep cameras from
+            #  overwriting one another. Grabbing image IDs could also accomplish
+            #  this.
+            
+            device_serial_number = ''
+            node_device_serial_number = PySpin.CStringPtr(self.nodemap_tldevice.GetNode('DeviceSerialNumber'))
+            if PySpin.IsAvailable(node_device_serial_number) and PySpin.IsReadable(node_device_serial_number):
+                device_serial_number = node_device_serial_number.GetValue()
+                print('Device serial number retrieved as %s...' % device_serial_number)
+                                
+            # Close program
+            print('Press enter to close the program..')
+    
+            # Figure(1) is default so you can omit this line. Figure(0) will create a new window every time program hits this line
+            fig = plt.figure(1)
+    
+            # Close the GUI when close event happens
+            fig.canvas.mpl_connect('close_event', self.handle_close)
+            
+            # Retrieve and display images
+            while(self.continue_recording):
+                try:
+                    #  Retrieve next received image
+                    #  *** NOTES ***
+                    #  Capturing an image houses images on the camera buffer. Trying
+                    #  to capture an image that does not exist will hang the camera.
+                    #  *** LATER ***
+                    #  Once an image from the buffer is saved and/or no longer
+                    #  needed, the image must be released in order to keep the
+                    #  buffer from filling up.
+                    image_result = self.cam.GetNextImage()
+                    
+                    #  Ensure image completion
+                    if image_result.IsIncomplete():
+                        print('Image incomplete with image status %d ...' % image_result.GetImageStatus())
+                    else:
+                        # Getting the image data as a numpy array
+                        image_data = image_result.GetNDArray()
+    
+                        # Draws an image on the current figure
+                        plt.imshow(image_data, cmap='gray')
+    
+                        # Interval in plt.pause(interval) determines how fast the images are displayed in a GUI
+                        # Interval is in seconds.
+                        plt.pause(0.001)
+    
+                        # Clear current reference of a figure. This will improve display speed significantly
+                        plt.clf()
+
+                        # If user presses enter, close the program
+                        if keyboard.is_pressed('ENTER'):
+                            print('Program is closing...')
+    
+                            # Close figure
+                            plt.close('all')
+                            input('Done! Press Enter to exit...')
+                            self.continue_recording=False
+                            
+                    #  Release image
+                    #  *** NOTES ***
+                    #  Images retrieved directly from the camera (i.e. non-converted
+                    #  images) need to be released in order to keep from filling the
+                    #  buffer.
+                    image_result.Release()
+                    
+                except PySpin.SpinnakerException as ex:
+                    print('Error: %s' % ex)
+                    return False
+                    
+            #  End acquisition
+            #
+            #  *** NOTES ***
+            #  Ending acquisition appropriately helps ensure that devices clean up
+            #  properly and do not need to be power-cycled to maintain integrity.
+            self.cam.EndAcquisition()
+            
+        except PySpin.SpinnakerException as ex:
+            print('Error: %s' % ex)
+            return False
+            
+        return True
+   
+    def snapShot(self, display = True, save = True, fileName = 'default.tiff'):
+        # set acquisition to single-frame; take an image; save image in directory
+        node_acquisition_mode = PySpin.CEnumerationPtr(self.nodemap.GetNode('AcquisitionMode'))
+        if not PySpin.IsAvailable(node_acquisition_mode) or not PySpin.IsWritable(node_acquisition_mode):
+            print('Unable to set acquisition mode to single-frame (enum retrieval). Aborting...')
+            return False
+            
+        # Retrieve entry node from enumeration node
+        node_acquisition_mode_singleFrame = node_acquisition_mode.GetEntryByName('SingleFrame')
+        if not PySpin.IsAvailable(node_acquisition_mode_singleFrame) or not PySpin.IsReadable(
+                node_acquisition_mode_singleFrame):
+            print('Unable to set acquisition mode to single-frame (entry retrieval). Aborting...')
+            return False
+            
+        # Retrieve integer value from entry node
+        acquisition_mode_singleFrame = node_acquisition_mode_singleFrame.GetValue()
+
+        # Set integer value from entry node as new value of enumeration node
+        node_acquisition_mode.SetIntValue(acquisition_mode_singleFrame)
+
+        print('Acquisition mode set to single-frame...')
+        
+        print('Acquiring image...')
+        self.cam.BeginAcquisition()
+        image_result = self.cam.GetNextImage()
+        #  Ensure image completion
+        if image_result.IsIncomplete():
+            print('Image incomplete with image status %d ...' % image_result.GetImageStatus())
+        else:
+            # Getting the image data as a numpy array
+            image_data = image_result.GetNDArray()
+        #  Images retrieved directly from the camera (i.e. non-converted
+        #  images) need to be released in order to keep from filling the
+        #  buffer.
+        image_result.Release()
+        #  Ending acquisition appropriately helps ensure that devices clean up
+        #  properly and do not need to be power-cycled to maintain integrity.
+        self.cam.EndAcquisition()
+        # Show the image that you collected
+        print('Image Complete')
+        
+        if display == True:
+            plt.imshow(image_data, cmap='viridis')
+            plt.show()
+            
+        if save == True:
+            cv2.imwrite(fileName,image_data)
+            
+        return True
+        
+    def getExposure(self):
+        self.exposure = self.cam.ExposureTime.GetValue()/1e6 # Division by 1e6 to convert from us to s
+        return self.exposure
+        
+    def getGain(self):
+        self.gain = self.cam.Gain.GetValue()
+        return self.gain
+        #print('Gain = %s dB' % self.gain)
+        
+    def setExposure(self,setValueSecond):
+        setValue = setValueSecond*1e6 # converts to us
+        # Make sure that auto exposure has been disabled
+        if self.cam.ExposureAuto.GetValue() == True:
+            print('Cannot set exposure because auto-exposure is currently activated. Deactivate auto-exposure to use this method.')
+            return False
+        # Ensure desired exposure time falls between the max and min
+        if setValue > self.cam.ExposureTime.GetMax():
+            print('Cannot set exposure because set value %s micro-second is too large.' % setValue)
+            print('Max exposure time is %s micro-second' % self.cam.ExposureTime.GetMax())
+            return False
+        if setValue < self.cam.ExposureTime.GetMin():
+            print('Cannot set exposure because set value %s micro-second is too small.' % setValue)
+            print('Min exposure time is %s micro-second' % self.cam.ExposureTime.GetMin())
+            return False
+                      
+        # Send command to update the exposure to the camera
+        try:
+            self.cam.ExposureTime.SetValue(setValue)
+            return True
+        except:
+            return False        
+        
+    def setGain(self,setValue):
+        
+        # Make sure that auto gain has been disabled
+        if self.cam.GainAuto.GetValue() == True:
+            print('Cannot set gain because auto-gain is currently activated. Deactivate auto-gain to use this method.')
+            return False
+        # Ensure desired gain falls between the max and min
+        if setValue > self.cam.Gain.GetMax():
+            print('Cannot set gain because set value %s dB is too large.' % setValue)
+            print('Max gain is %s dB' % self.cam.Gain.GetMax())
+            return False
+        if setValue < self.cam.Gain.GetMin():
+            print('Cannot set gain because set value %s dB is too small.' % setValue)
+            print('Min gain is %s dB' % self.cam.Gain.GetMin())
+            return False
+
+        # Send command to update the gain to the camera
+        try:
+            self.cam.Gain.SetValue(setValue)
+            return True
+        except:
+            return False
+
+    def configureForContinuousCapture(self):
+        sNodemap = self.cam.GetTLStreamNodeMap()
+        
+        # Change bufferhandling mode to NewestOnly
+        node_bufferhandling_mode = PySpin.CEnumerationPtr(sNodemap.GetNode('StreamBufferHandlingMode'))
+        if not PySpin.IsAvailable(node_bufferhandling_mode) or not PySpin.IsWritable(node_bufferhandling_mode):
+            print('Unable to set stream buffer handling mode.. Aborting...')
+            return False
+            
+        # Retrieve entry node from enumeration node
+        node_newestonly = node_bufferhandling_mode.GetEntryByName('NewestOnly')
+        if not PySpin.IsAvailable(node_newestonly) or not PySpin.IsReadable(node_newestonly):
+            print('Unable to set stream buffer handling mode.. Aborting...')
+            return False
+            
+        # Retrieve integer value from entry node
+        node_newestonly_mode = node_newestonly.GetValue()
+        
+        # Set integer value from entry node as new value of enumeration node
+        node_bufferhandling_mode.SetIntValue(node_newestonly_mode)
+        
+        try:
+            node_acquisition_mode = PySpin.CEnumerationPtr(self.nodemap.GetNode('AcquisitionMode'))
+            if not PySpin.IsAvailable(node_acquisition_mode) or not PySpin.IsWritable(node_acquisition_mode):
+                print('Unable to set acquisition mode to continuous (enum retrieval). Aborting...')
+                return False
+    
+            # Retrieve entry node from enumeration node
+            node_acquisition_mode_continuous = node_acquisition_mode.GetEntryByName('Continuous')
+            if not PySpin.IsAvailable(node_acquisition_mode_continuous) or not PySpin.IsReadable(
+                    node_acquisition_mode_continuous):
+                print('Unable to set acquisition mode to continuous (entry retrieval). Aborting...')
+                return False
+                
+            # Retrieve integer value from entry node
+            acquisition_mode_continuous = node_acquisition_mode_continuous.GetValue()
+    
+            # Set integer value from entry node as new value of enumeration node
+            node_acquisition_mode.SetIntValue(acquisition_mode_continuous)
+    
+            print('Acquisition mode set to continuous...')
+            
+        except PySpin.SpinnakerException as ex:
+            print('Error: %s' % ex)
+            return False
+      
 
 class SetupApp():
-    def __init__(self, wait = .033): 
+    def __init__(self, wait = .033, dsWait = 0.1):
+        self.exposure = 1
+        self.gain = 30
+        
         # Setup the tkinter GUI window
         self.root = tk.Tk()
         self.root.geometry("1000x700")
         self.root.configure(bg='white')
         self.root.wm_title("Smart Scan")
         self.root.iconbitmap("kogar_0.ico")
+        #self.root.iconify()
         
         # Connect to the camera, collect the initial image and plot the image
-        # SCAF
-        self.cam = Camera()
-        self.camImage = self.cam.collectImage()
-        self.h, self.w = self.camImage.shape
+        # initialize camera
+        self.camera = Camera()
+        self.camera.setExposure(self.exposure)
+        self.camera.setGain(self.gain)
+        self.camera.configureForContinuousCapture()
+        self.camera.cam.BeginAcquisition() # start image acquisition
+        print('Acquiring Images...')
+        
+        # take image
+        sampleImage = self.camera.cam.GetNextImage()
+        #  Ensure image completion
+        if sampleImage.IsIncomplete():
+            print('Image incomplete with image status %d ...' % sampleImage.GetImageStatus())
+        else:
+            # Getting the image data as a numpy array
+            self.camImage = sampleImage.GetNDArray()
+            self.h, self.w = self.camImage.shape
+        sampleImage.Release()
+        
         gs = gridspec.GridSpec(2, 2,width_ratios=[self.w,self.w*.1], height_ratios=[self.h,self.h*.1])
         self.camFig = plt.figure()
         self.camAx = [plt.subplot(gs[0]),]
@@ -246,6 +637,9 @@ class SetupApp():
         self.ppw = 100
         self.rm = [] # list of rois
         self.roiActive = False
+        
+        # Wait time for delay stage motion
+        self.dsWait = dsWait
         
         # Some general formatting vars
         padyControls = 1
@@ -344,24 +738,33 @@ class SetupApp():
             fg='black', bg='white',
             command=self.saveImage)
         self.gain_label_string = tk.StringVar()
-        self.gain_label_string.set(f'Gain = {self.cam.gain} dB')
+        self.gain_label_string.set(f'Gain = {self.camera.getGain()} dB')
         self.gain_label = tk.Label(master=self.controls,textvariable=self.gain_label_string,bg=cntrlBg)
         self.gainEntry = tk.Entry(master=self.controls,width=entryWidth)
-        self.gainEntry.insert(-1,self.cam.gain)
+        self.gainEntry.insert(-1,self.camera.getGain())
         self.exposure_label_string = tk.StringVar()
-        self.exposure_label_string.set(f'Exposure = {self.cam.exposure} s')
+        self.exposure_label_string.set(f'Exposure = {self.camera.getExposure()} s')
         self.exposure_label = tk.Label(master=self.controls,textvariable=self.exposure_label_string,bg=cntrlBg)
         self.exposureEntry = tk.Entry(master=self.controls,width=entryWidth)
-        self.exposureEntry.insert(-1,self.cam.exposure)
+        self.exposureEntry.insert(-1,self.camera.getExposure())
         def camSettingsButtonFunc():
             if self.gainEntry.get() != '':
-                gain = float(self.gainEntry.get())
-                self.cam.setGain(gain)
-                self.gain_label_string.set(f'Gain = {gain} dB')
+                self.gain = float(self.gainEntry.get())
+                self.camera.setGain(self.gain)
+            else:
+                self.gainEntry.insert(-1,self.camera.getGain())
+                
+            self.gain_label_string.set(f'Gain = {self.camera.getGain()} dB')
+            
             if self.exposureEntry.get() != '':
-                exposure = float(self.exposureEntry.get())
-                self.cam.setExposure(exposure)
-                self.exposure_label_string.set(f'Exposure = {exposure} s')
+                self.exposure = float(self.exposureEntry.get())
+                self.camera.setExposure(self.exposure)
+            else:
+                self.exposureEntry.insert(-1,self.camera.getExposure())
+                
+            self.exposure_label_string.set(f'Exposure = {self.camera.getExposure()} s')
+            
+            
         self.camSettingsButton = tk.Button(
             master=self.controls,
             text="Update Cam Settings",
@@ -372,13 +775,16 @@ class SetupApp():
         
         # Adding the ds controls
         self.currentDsPos_label_string = tk.StringVar()
-        self.currentDsPos_label_string.set(f'Current dsPos = {self.ds.dsPos}')
+        self.currentDsPos_label_string.set(f'Current dsPos = {self.ds.getPos()}')
         self.currentDsPos_label = tk.Label(master=self.controls,textvariable=self.currentDsPos_label_string,bg=cntrlBg)
         dsPos1_label = tk.Label(master=self.controls,text="dsPos1 (mm)",bg=cntrlBg)
+        
         def dsPos1ButtonFunc():
             dsPos = float(self.dsPos1Entry.get())
             self.ds.setPos(dsPos)
-            self.currentDsPos_label_string.set(f'Current dsPos = {dsPos}')
+            time.sleep(self.dsWait)
+            self.currentDsPos_label_string.set(f'Current dsPos = {self.ds.getPos()}')
+            
         self.dsPos1Entry = tk.Entry(master=self.controls,width=entryWidth)
         self.dsPos1Button = tk.Button(
             master=self.controls,
@@ -388,10 +794,13 @@ class SetupApp():
             fg='black', bg='white',
             command=dsPos1ButtonFunc)
         dsPos2_label = tk.Label(master=self.controls,text="dsPos2 (mm)",bg=cntrlBg)
+        
         def dsPos2ButtonFunc():
             dsPos = float(self.dsPos2Entry.get())
             self.ds.setPos(dsPos)
-            self.currentDsPos_label_string.set(f'Current dsPos = {dsPos}')
+            time.sleep(self.dsWait)
+            self.currentDsPos_label_string.set(f'Current dsPos = {self.ds.getPos()}')
+            
         self.dsPos2Entry = tk.Entry(master=self.controls,width=entryWidth)
         self.dsPos2Button = tk.Button(
             master=self.controls,
@@ -434,7 +843,6 @@ class SetupApp():
         self.batchSizeEntry.insert(-1,1)
         scanDirLoc_label = tk.Label(master=self.scanFrame,text="Scan Directory",bg=cntrlBg)
         self.scanDirLocEntry = tk.Entry(master=self.scanFrame,width=largeEntryWidth)
-        nDirLocEntry = tk.Entry(master=self.scanFrame,width=largeEntryWidth)
         self.varTransCorr = tk.IntVar()
         self.transCorrBox = tk.Checkbutton(master=self.scanFrame, text='Translation Correction',variable=self.varTransCorr, onvalue=1, offvalue=0,bg=cntrlBg)
         self.varSmartScan = tk.IntVar()
@@ -458,6 +866,43 @@ class SetupApp():
             fg='black', bg='white',
             command=startScan)
         
+        # Add a image progress bar
+        self.imProgBar = ttk.Progressbar(master=self.controls,length=160)
+        
+        
+        # Image set and averaging controls
+        self.numAvgDis = 0
+        self.varAvgDis = tk.IntVar()
+        self.varAvgDis_label_string = tk.StringVar()
+        self.varAvgDis_label_string.set(f'Average Images (N = {self.numAvgDis})')
+        self.avgDisBox = tk.Checkbutton(master=self.controls, textvariable=self.varAvgDis_label_string,variable=self.varAvgDis, onvalue=1, offvalue=0,bg=cntrlBg)
+        self.varSaveDir = tk.IntVar()
+        
+        self.avgDirLoc_label = tk.Label(master=self.controls,text='Image Set Directory',bg=cntrlBg)
+        self.avgDirLocEntry = tk.Entry(master=self.controls,width=largeEntryWidth)
+        
+        # Despeckle controls
+        self.varMedianFilter = tk.IntVar()
+        self.medianFilterBox = tk.Checkbutton(master=self.controls, text='Median Filter (Despeckle)',variable=self.varMedianFilter, onvalue=1, offvalue=0,bg=cntrlBg)
+        
+        self.saveImageSet = False
+        def imageSetButtonFunc():
+            if self.saveImageSet == False:
+                self.saveImageSet = True
+                self.imageSetButton.config(bg='yellow')
+            else:
+                self.saveImageSet = False
+                self.imageSetButton.config(bg='white')
+                
+        self.imageSetButton = tk.Button(
+            master=self.controls,
+            text="Collect Image Set",
+            width=buttonWidth,
+            height=1,
+            fg='black', bg='white',
+            command=imageSetButtonFunc)
+        
+        
         # Pack controls
         add_roi_button.pack(pady=padyControls)
         self.saveRoisButton.pack(pady=padyControls)
@@ -470,6 +915,7 @@ class SetupApp():
         self.exposure_label.pack(pady=padyControls)
         self.exposureEntry.pack(pady=padyControls)
         self.camSettingsButton.pack(pady=padyControls)
+        self.imProgBar.pack(pady=padyControls)
         tk.Frame(master=self.controls, bd=100, relief='flat',height=sepHeight,width=sepWidth,bg='black').pack(side='top', pady=padySep)
         self.currentDsPos_label.pack()
         dsPos1_label.pack(pady=padyControls)
@@ -481,6 +927,11 @@ class SetupApp():
         tk.Frame(master=self.controls, bd=100, relief='flat',height=sepHeight,width=sepWidth,bg='black').pack(side='top', pady=padySep)
         self.newPointButton.pack(pady=padyControls)
         self.clearDataButton.pack(pady=padyControls)
+        self.avgDisBox.pack(pady=padyControls)
+        self.medianFilterBox.pack(pady=padyControls)
+        self.avgDirLoc_label.pack(pady=padyControls)
+        self.avgDirLocEntry.pack(pady=padyControls)
+        self.imageSetButton.pack(pady=padyControls)
         # ~ tk.Frame(master=self.controls, bd=100, relief='flat',height=sepHeight,width=sepWidth,bg='black').pack(side='top', pady=padySep)
         
         scanDsPos_label.pack(pady=padyControls)
@@ -494,6 +945,19 @@ class SetupApp():
         self.transCorrBox.pack(pady=padyControls)
         self.smartScanBox.pack(pady=padyControls)
         self.startScanButton.pack(pady=padyControls)
+        
+        def userPressReturn(event):
+            entry = self.root.focus_get() # Get the entry that the user has selected
+            if entry == self.gainEntry or entry == self.exposureEntry:
+                camSettingsButtonFunc()
+            if entry == self.dsPos1Entry:
+                dsPos1ButtonFunc()
+            if entry == self.dsPos2Entry:
+                dsPos2ButtonFunc()
+                
+        
+        # Bind the enter key to activate selected entry
+        self.root.bind('<Return>', userPressReturn)
         
         # Build sliders for adjusting the brightness and contrast of the image
         ax_setVals = [plt.axes([0.15, 0.06, 0.5, 0.02]), plt.axes([0.15, 0.02, 0.5, 0.02])]
@@ -520,7 +984,6 @@ class SetupApp():
         self.lineProfile_h = self.camAx[0].axhline(y=self.lineProfile_y,c='black')
         
         # Plot the cam image and the line profile crosshairs
-        # SCAF
         self.camImageObj = self.camAx[0].imshow(self.camImage)
         self.lineProfilePlot_v, = self.camAx[1].plot(self.camImage[:,int(self.lineProfile_x)],range(self.h))
         self.lineProfilePlot_h, = self.camAx[2].plot(range(self.w),self.camImage[int(self.lineProfile_y),:])
@@ -571,11 +1034,10 @@ class SetupApp():
         self.thrDataAcquisition = threading.Thread(target=self.dataAcquisitionLoop, args=(), kwargs={})
         self.thrDataAcquisition.start() # Will run takeImageTestRepeat
         
-        print('check point')
+        print('check point 1')
         
         self.root.protocol("WM_DELETE_WINDOW", on_closing)
         self.root.mainloop()
-        
         
         # If 2 we start a scan
         if self.camLive == 2:
@@ -605,8 +1067,16 @@ class SetupApp():
             
             self.root.destroy() # Totally destroy the setup gui so we can move into the scan gui
             
-            scanapp = ScanApp(cam=self.cam,ds=self.ds,dsPositions=dsPositions,batchSize=batchSize, \
+            scanapp = ScanApp(camera=self.camera,ds=self.ds,dsPositions=dsPositions,batchSize=batchSize, \
                               translationCorrectionQ=tcq, smartScanQ=ssq, scanDir=scanDir, tzpos=tzpos, rm=self.rm)
+        else:
+            print('Disconnecting camera and delay stage')
+            self.ds.disconnect() # disconnect from delay stage
+            #  Ending acquisition appropriately helps ensure that devices clean up
+            #  properly and do not need to be power-cycled to maintain integrity.
+            self.camera.setExposure(1) # Reset exposure to 1.0 s and disconnect from the camera.
+            self.camera.cam.EndAcquisition()
+            self.camera.disconnect() # disconnect from camera
       
     def camonclick(self,event):
         ax = self.camAx[0]
@@ -683,8 +1153,8 @@ class SetupApp():
             ylims = [ydata - (ydata-cur_ylim[0]) / scale_factor, ydata + (cur_ylim[1]-ydata) / scale_factor]
             # make sure the limits aren't too big
             if (xlims[1]-xlims[0] > self.w) or (ylims[0]-ylims[1] > self.h):
-                xlims = cur_xlim
-                ylims = cur_ylim
+                xlims = [0, self.w]
+                ylims = [self.h, 0]
             # make sure the limits don't fall outside the image size
             if xlims[0] < 0:
                 xlims[1] += -xlims[0]
@@ -716,19 +1186,62 @@ class SetupApp():
     def saveImage(self):
         now = datetime.datetime.now()
         nowString = now.strftime("%Y_%m_%d-%H_%M_%S")
-        defaultFileName = nowString+'expo'+ str(self.exposureEntry.get()) + 'gain' + str(self.exposureEntry.get()) + '.tiff'
+        defaultFileName = nowString+'expo'+ str(self.camera.getExposure()) + 'gain' + str(self.camera.getGain()) + '.tiff'
         self.saveImageFileName = tk.filedialog.asksaveasfile(mode='w',initialfile=defaultFileName,defaultextension=".*",filetypes = [("image files", ".tiff")])
         if self.saveImageFileName != None:
             tifffile.imwrite(self.saveImageFileName.name,self.camImage)
         
     def dataAcquisitionLoop(self):
-        while self.camLive == 1:
+        thrProgBar = None # Used as variable for the progress bar thread
+        while self.camLive == 1:            
+            image_result = self.camera.cam.GetNextImage()
+            #  Ensure image completion
+            if image_result.IsIncomplete():
+                print('Image incomplete with image status %d ...' % image_result.GetImageStatus())
+            else:
+                # Getting the image data as a numpy array
+                newImage = image_result.GetNDArray()
+                
+                
+            #  Images retrieved directly from the camera (i.e. non-converted
+            #  images) need to be released in order to keep from filling the
+            #  buffer.
+            image_result.Release()
+            
+            # Check whether despeckle is applied
+            if self.varMedianFilter.get() == 1:
+                newImage = median_filter(newImage, size=2)
+            
+            # Check whether we are saving image sets
+            if self.saveImageSet and self.avgDirLocEntry.get() != '':
+                tifffile.imwrite(f'{self.avgDirLocEntry.get()}//{time.time()}.tiff',newImage)
+            
+            # Check whether image averaging is selected in which the display will be updated to an average of all the images taken    
+            if self.varAvgDis.get() == 0:
+                self.camImage = newImage
+                self.numAvgDis = 0
+            else:
+                self.camImage = (newImage + self.numAvgDis*self.camImage)/(self.numAvgDis+1)
+                self.numAvgDis += 1
+            
+            # Update the label to indicate the number of images that have been taken to create the displayed image
+            self.varAvgDis_label_string.set(f'Average Images (N = {self.numAvgDis})')
+            
+            # Compute the image rate
             deltaTString = '%.3f' % round(time.time()-self.t1,5)
             self.camAx[0].set_title(f"Image Rate =  {deltaTString} s, ROI # = {len(self.rm)}")
+            
             self.t1 = time.time()
             
-            self.camImage = self.cam.collectImage() # Take a new image from the camera
-            time.sleep(0.25)
+            # Make sure the previous progress bar thread has concluded
+            if (thrProgBar != None) and (thrProgBar.is_alive()):
+                eventProgBar.set()
+                thrProgBar.join()
+            
+            eventProgBar = threading.Event()    
+            thrProgBar = threading.Thread(target=self.stepProgBar, args=(eventProgBar,self.wait + self.exposure/50), kwargs={})
+            thrProgBar.start()
+            
             self.camImageObj.set_data(self.camImage) # Set image data to the plot
             self.lineProfile_v.set_xdata(self.lineProfile_x)
             self.lineProfile_h.set_ydata(self.lineProfile_y)
@@ -737,7 +1250,6 @@ class SetupApp():
             self.lineProfilePlot_h.set_ydata(self.camImage[int(self.lineProfile_y),:])
             self.camAx[2].set_ylim(min(self.camImage[int(self.lineProfile_y),:]),max(self.camImage[int(self.lineProfile_y),:]))
             
-            
             if len(self.rm) > 0:
                 roiPixelSum = 0
                 roiTotalArea = 0
@@ -745,7 +1257,7 @@ class SetupApp():
                 for r in self.rm:
                     # Only count an ROI if it is active
                     if r.live:
-                        roiImage = self.camImage[int(r.cy-r.h/2):int(r.cy+r.h/2),int(r.cx-r.w/2):int(r.cx+r.w/2)]
+                        roiImage = newImage[int(r.cy-r.h/2):int(r.cy+r.h/2),int(r.cx-r.w/2):int(r.cx+r.w/2)]
                         roiPixelSum += np.sum(roiImage)
                         roiTotalArea += roiImage.shape[0]*roiImage.shape[1]
                         
@@ -775,20 +1287,41 @@ class SetupApp():
                 self.timeHistory = []
                 self.avgIntensity = np.append(self.avgIntensity,[0])
                 self.stdIntensity = np.append(self.stdIntensity,[0])
+                
+                # Zero the cam image if there is averaging
+                if self.varAvgDis.get() == 1:
+                    self.camImage = 0*self.camImage
+                    self.numAvgDis = 0
+                
                 self.t0 = time.time()
+                
             if self.resetLongHistory:
                 self.resetLongHistory = False
                 self.avgIntensity = np.array([0],dtype='float')
                 self.stdIntensity = np.array([0],dtype='float')
-        
+            
+        # Make sure the previous progress bar thread has concluded
+        if (thrProgBar != None) and (thrProgBar.is_alive()):
+            eventProgBar.set()
+            thrProgBar.join()
         self.root.quit() # Close the prep GUI window when the scan is started
+    
+    def stepProgBar(self, event, spf):
+        N = int(self.exposure/spf)
+        self.imProgBar['value'] = 100/N
+        while not event.is_set():
+            self.imProgBar.step(100/N)
+            time.sleep(spf)
+            
+        
+        
         
 class ScanApp():
-    def __init__(self, cam, ds, dsPositions, batchSize, translationCorrectionQ, smartScanQ, scanDir, tzpos, rm, dsWait = 0, wait = .033):
-        self.cam=cam
+    def __init__(self, camera, ds, dsPositions, batchSize, translationCorrectionQ, smartScanQ, scanDir, tzpos, rm, dsWait = 0.1, wait = .033):
+        self.camera=camera
         self.ds=ds
-        self.exposure=self.cam.exposure
-        self.gain=self.cam.gain
+        self.exposure=self.camera.getExposure()
+        self.gain=self.camera.getGain()
         self.dsPositions=dsPositions
         self.batchSize=batchSize
         self.translationCorrectionQ=translationCorrectionQ
@@ -823,6 +1356,7 @@ class ScanApp():
         self.root.configure(bg='white')
         self.root.wm_title("Smart Scan")
         self.root.iconbitmap("kogar_0.ico")
+        #self.root.iconify()
         
         # Make a Tkinter frame for the data plots
         self.dataFrame = tk.Frame(master=self.root, width=200, height=100, padx=5, pady=5)
@@ -851,10 +1385,18 @@ class ScanApp():
         # Data type for saving images
         self.image_dtype = np.float32
         
-        # collect the initial image and plot the image
-        self.camImage = self.cam.collectImage()
-        self.h, self.w = self.camImage.shape
+        # collect the initial image
+        image_result = self.camera.cam.GetNextImage()
+        #  Ensure image completion
+        if image_result.IsIncomplete():
+            print('Image incomplete with image status %d ...' % image_result.GetImageStatus())
+        else:
+            # Getting the image data as a numpy array
+            self.camImage = image_result.GetNDArray()
+            self.h, self.w = self.camImage.shape
+            
         self.zeroImage = np.zeros(np.shape(self.camImage),dtype=self.image_dtype)
+        
         
         # If translation correction is active, find the initial reference location for later comparison
         self.tcorr_0 = np.zeros(2) # array that stores the reference position for translation correction
@@ -899,11 +1441,11 @@ class ScanApp():
         self.batchNumber_label = tk.Label(master=self.controls,textvariable=self.batchNumber_label_string,bg=cntrlBg)
         
         self.dsPosition_label_string = tk.StringVar()
-        self.dsPosition_label_string.set(f"dsPos = {self.ds.dsPos} mm")
+        self.dsPosition_label_string.set(f"dsPos = {self.ds.getPos()} mm")
         self.dsPosition_label = tk.Label(master=self.controls,textvariable=self.dsPosition_label_string,bg=cntrlBg)
         
         self.exposure_label_string = tk.StringVar()
-        self.exposure_label_string.set(f'Exposure = {self.cam.exposure} s')
+        self.exposure_label_string.set(f'Exposure = {self.camera.getExposure()} s')
         self.exposure_label = tk.Label(master=self.controls,textvariable=self.exposure_label_string,bg=cntrlBg)
         
         def pauseScanButtonFunc():
@@ -1045,7 +1587,8 @@ class ScanApp():
         # Create the files of this batch average
         for p in range(len(self.dsPositions)):
             dsPos = self.dsPositions[p] # direction doesn't matter here; we just need the positions for the files names
-            tifffile.imwrite(f'{self.scanDir}//average//pos={dsPos}.tiff',self.zeroImage)
+            dsPosString = '%.4f' % dsPos
+            tifffile.imwrite(f'{self.scanDir}//average//pos={dsPosString}.tiff',self.zeroImage)
         
         thrImage = None # Variable that contains the image analysis async thread
         thrBatchAverage = None # Variable that contains the moving batch average thread
@@ -1058,7 +1601,8 @@ class ScanApp():
             # Create the files of a new batch
             for p in range(len(self.dsPositions)):
                 dsPos = self.dsPositions[p] # direction doesn't matter here; we just need the positions for the files names
-                tifffile.imwrite(f'{self.scanDir}//batch{self.b}//pos={dsPos}.tiff',self.zeroImage)
+                dsPosString = '%.4f' % dsPos
+                tifffile.imwrite(f'{self.scanDir}//batch{self.b}//pos={dsPosString}.tiff',self.zeroImage)
                 
             now = datetime.datetime.now()
             self.runLog += f'batch {self.b} started at {now.strftime("%Y_%m_%d-%H_%M_%S")} \n'
@@ -1084,7 +1628,7 @@ class ScanApp():
                     
                     # Compute the image rate
                     deltaTString = '%.3f' % round(time.time()-self.t1,5)
-                    deltaETString = '%.3f' % round(time.time()-self.t1 - self.cam.exposure - self.dsWait,5)
+                    deltaETString = '%.3f' % round(time.time()-self.t1 - self.camera.exposure - self.dsWait,5)
                     self.camTitle = self.camAx.set_title(f"Image Rate =  {deltaTString} s (et = {deltaETString} s)")
                     self.t1 = time.time()
 
@@ -1099,13 +1643,13 @@ class ScanApp():
                     # Move to the next ds pos
                     self.ds.setPos(dsPos)
                     
-                    # Write the current ds pos to the gui
-                    self.dsPosition_label_string.set(f"dsPos = {self.ds.dsPos} mm")
-                    
-                    self.runLog += f'\t \t dsPos = {dsPos} mm, pi = {self.pi}, deltaT = {deltaTString}, ET = {deltaETString} \n'
-                    
                     # Give a wait for the motor time
                     time.sleep(self.dsWait)
+                    
+                    # Write the current ds pos to the gui
+                    self.dsPosition_label_string.set(f"dsPos = {self.ds.getPos()} mm")
+                    
+                    self.runLog += f'\t \t dsPos = {dsPos} mm, pi = {self.pi}, deltaT = {deltaTString}, ET = {deltaETString} \n'
                     
                     # Make sure the previous image thread has concluded
                     if (thrImage != None) and (thrImage.is_alive()):
@@ -1158,12 +1702,22 @@ class ScanApp():
         t0 = time.time()
         dsPos = self.dsPositions[pi]
         t_threadStart = time.time()
-        # Take a new image from the camera
-        self.camImage = self.cam.collectImage()
-        t_newImage = time.time()
         
-        # ~ # SCAF
-        self.camImage = self.camImage + pi
+        # Take a new image from the camera
+        image_result = self.camera.cam.GetNextImage()
+        #  Ensure image completion
+        if image_result.IsIncomplete():
+            print('Image incomplete with image status %d ...' % image_result.GetImageStatus())
+        else:
+            # Getting the image data as a numpy array
+            self.camImage = image_result.GetNDArray()
+            
+        #  Images retrieved directly from the camera (i.e. non-converted
+        #  images) need to be released in order to keep from filling the
+        #  buffer.
+        image_result.Release()
+            
+        t_newImage = time.time()
                 
         self.runLog += f'\t \t processImage thread image acquired for pi = {pi}, s = {s} | duration =  {round(time.time()-t0,2)} \n'
         
@@ -1223,9 +1777,10 @@ class ScanApp():
         
         #SCAF
         # Load the image corresponding to this position from the current batch, update the moving average, save
-        imAvg = tifffile.imread(f'{self.scanDir}//batch{b}//pos={dsPos}.tiff')
+        dsPosString = '%.4f' % dsPos
+        imAvg = tifffile.imread(f'{self.scanDir}//batch{b}//pos={dsPosString}.tiff')
         imAvg = np.array((self.camImage + bi*imAvg)/(bi+1),dtype=self.image_dtype) # moving average
-        tifffile.imwrite(f'{self.scanDir}//batch{b}//pos={dsPos}.tiff',imAvg) # save the updated image
+        tifffile.imwrite(f'{self.scanDir}//batch{b}//pos={dsPosString}.tiff',imAvg) # save the updated image
         
         now = datetime.datetime.now()
         self.runLog += f'\t \t processImage thread completed for pi = {pi}, s = {s} | duration =  {round(time.time()-t0,2)} \n'
@@ -1235,18 +1790,28 @@ class ScanApp():
         for p in range(len(self.dsPositions)):
             print(f'moving batch average on position index {p}')
             dsPos = self.dsPositions[p]
-            imNew = tifffile.imread(f'{self.scanDir}//batch{b}//pos={dsPos}.tiff') # Load the image corresponding to this position and the latest batch
-            imAvg = tifffile.imread(f'{self.scanDir}//average//pos={dsPos}.tiff') # Load the moving average image corresponding to this position
+            dsPosString = '%.4f' % dsPos
+            imNew = tifffile.imread(f'{self.scanDir}//batch{b}//pos={dsPosString}.tiff') # Load the image corresponding to this position and the latest batch
+            imAvg = tifffile.imread(f'{self.scanDir}//average//pos={dsPosString}.tiff') # Load the moving average image corresponding to this position
             imAvg = np.array((imNew + b*imAvg)/(b+1),dtype=self.image_dtype) # compute moving average
-            tifffile.imwrite(f'{self.scanDir}//average//pos={dsPos}.tiff',imAvg) # save the updated image
+            tifffile.imwrite(f'{self.scanDir}//average//pos={dsPosString}.tiff',imAvg) # save the updated image
             
         now = datetime.datetime.now()
         self.runLog += f'movingAverageBatch thread completed for b = {b} at {now.strftime("%Y_%m_%d-%H_%M_%S")} \n'
     
-    def endScan(self):
+    def endScan(self):        
         # Make sure all extra threads are closed out
         while len(threading.enumerate()) > 2:
             time.sleep(self.wait)
+        
+        # Disconnect from devices    
+        self.ds.disconnect() # disconnect from delay stage
+        #  Ending acquisition appropriately helps ensure that devices clean up
+        #  properly and do not need to be power-cycled to maintain integrity.
+        self.camera.setExposure(1) # Reset exposure to 1.0 s and disconnect from the camera.
+        self.camera.cam.EndAcquisition()
+        self.camera.disconnect() # disconnect from camera
+        self.root.quit() # Close the prep GUI window when the scan is started
         
         # Do the final batch average
         self.movingAverageBatch(self.b)
@@ -1292,8 +1857,8 @@ class ScanApp():
         deltaS = np.max(self.timeHistory)-np.min(self.timeHistory)
         S = deltaS/(self.s+1)
         N = len(y00_sorted)
-        yf = scipy.fft.fft(y00_sorted)
-        xf = scipy.fft.fftfreq(N, T)[:N//2]
+        yf = fft.fft(y00_sorted)
+        xf = fft.fftfreq(N, T)[:N//2]
         axs[0,1].plot(xf, 2.0/N * np.abs(yf[0:N//2]),alpha=1,c='blue')
         
         print('S',S)
