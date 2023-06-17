@@ -1594,7 +1594,7 @@ class ScanApp():
         thrBatchAverage = None # Variable that contains the moving batch average thread
         # Start the scan loop
         while self.scanLive:
-            self.b += 1 # Record that a new batch is being taken
+            self.b += 1 # Record that a new batch is being taken, note that self.b is initiated at a value of -1
             self.batchNumber_label_string.set(f"batch # = {self.b}") # Write the current batch number to the gui
             # SCAF
             os.makedirs(f'{self.scanDir}//batch{self.b}') # Create a directory for the new batch files
@@ -1608,10 +1608,6 @@ class ScanApp():
             self.runLog += f'batch {self.b} started at {now.strftime("%Y_%m_%d-%H_%M_%S")} \n'
             # Start the new batch
             for bi in range(self.batchSize):
-                # Before starting new scan check whether a gentle stop call is active
-                if self.gentleStop:
-                    return self.endScan() #exits the dataAcquisitionLoop
-                    
                 self.s += 1 # Record that a new scan is being taken
                 self.scanNumber_label_string.set(f"scan # = {self.s}") # Write the current scan number to the gui
                 
@@ -1621,7 +1617,7 @@ class ScanApp():
                 for p in range(len(self.dsPositions)):
                     # Before collecting a new position, check whether a hard stop call is active
                     if self.hardStop:
-                        return self.endScan() #exits the dataAcquisitionLoop
+                        return self.endScan(weight = 0) #exits the dataAcquisitionLoop
                     
                     while self.paused:
                         time.sleep(self.wait) # block here if paused
@@ -1668,6 +1664,10 @@ class ScanApp():
                 # Update the lab time intensity monitor
                 self.intensityLabTime.append(0)
                 self.intensityLabTime[self.s] = np.mean(self.roiScanData[self.s,:]) # Update the lab time plot since the scan has ended
+                
+                # Before moving on to a new scan, check whether a gentle stop call is active
+                if self.gentleStop:
+                    return self.endScan(weight = (bi+1)/self.batchSize) #exits the dataAcquisitionLoop
             
             # This point in the loop occurs when a batch has concluded
             # Make sure the previous batch moving average thread has concluded
@@ -1785,7 +1785,8 @@ class ScanApp():
         now = datetime.datetime.now()
         self.runLog += f'\t \t processImage thread completed for pi = {pi}, s = {s} | duration =  {round(time.time()-t0,2)} \n'
     
-    def movingAverageBatch(self, b):
+    def movingAverageBatch(self, b, weight = 1):
+        # Weight should always be 1 except for on the last call to this function where the batch is most likely not complete
         print(f'Computing moving average on batch {b}')
         for p in range(len(self.dsPositions)):
             print(f'moving batch average on position index {p}')
@@ -1793,13 +1794,13 @@ class ScanApp():
             dsPosString = '%.4f' % dsPos
             imNew = tifffile.imread(f'{self.scanDir}//batch{b}//pos={dsPosString}.tiff') # Load the image corresponding to this position and the latest batch
             imAvg = tifffile.imread(f'{self.scanDir}//average//pos={dsPosString}.tiff') # Load the moving average image corresponding to this position
-            imAvg = np.array((imNew + b*imAvg)/(b+1),dtype=self.image_dtype) # compute moving average
+            imAvg = np.array((weight*imNew + b*imAvg)/(b+weight),dtype=self.image_dtype) # compute moving average
             tifffile.imwrite(f'{self.scanDir}//average//pos={dsPosString}.tiff',imAvg) # save the updated image
             
         now = datetime.datetime.now()
         self.runLog += f'movingAverageBatch thread completed for b = {b} at {now.strftime("%Y_%m_%d-%H_%M_%S")} \n'
     
-    def endScan(self):        
+    def endScan(self, weight):        
         # Make sure all extra threads are closed out
         while len(threading.enumerate()) > 2:
             time.sleep(self.wait)
@@ -1813,8 +1814,9 @@ class ScanApp():
         self.camera.disconnect() # disconnect from camera
         self.root.quit() # Close the prep GUI window when the scan is started
         
-        # Do the final batch average
-        self.movingAverageBatch(self.b)
+        # Do the final batch average, weight is zero for hard stops
+        if weight > 0:
+            self.movingAverageBatch(self.b, weight = weight)
         
         # Save some things
         np.savetxt(self.scanDir + '//' + 'roiScanData.csv',self.roiScanData,delimiter=',')
