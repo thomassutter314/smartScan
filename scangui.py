@@ -1317,7 +1317,7 @@ class SetupApp():
         
         
 class ScanApp():
-    def __init__(self, camera, ds, dsPositions, batchSize, translationCorrectionQ, smartScanQ, scanDir, tzpos, rm, dsWait = 0.1, wait = .033):
+    def __init__(self, camera, ds, dsPositions, batchSize, translationCorrectionQ, smartScanQ, scanDir, tzpos, rm, dsWait = 0.25, wait = .033):
         self.camera=camera
         self.ds=ds
         self.exposure=self.camera.getExposure()
