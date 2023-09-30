@@ -1,0 +1,225 @@
+scan app started at 2023_09_29-18_56_12 
+dataAcquisitionLoop started at 2023_09_29-18_56_13 
+batch 0 started at 2023_09_29-18_56_13 
+	 scan 0 (bi = 0) started at 2023_09_29-18_56_13 
+	 	 processImage thread image acquired for pi = 0, s = 0 | (t-t_start) =  1.2 
+	 	 processImage thread image acquired for pi = 1, s = 0 | (t-t_start) =  2.34 
+	 	 processImage thread image acquired for pi = 2, s = 0 | (t-t_start) =  3.45 
+	 	 processImage thread image acquired for pi = 3, s = 0 | (t-t_start) =  4.58 
+	 	 processImage thread image acquired for pi = 4, s = 0 | (t-t_start) =  5.7 
+	 	 processImage thread image acquired for pi = 5, s = 0 | (t-t_start) =  6.83 
+	 	 processImage thread image acquired for pi = 6, s = 0 | (t-t_start) =  7.94 
+	 	 processImage thread image acquired for pi = 7, s = 0 | (t-t_start) =  9.05 
+	 	 processImage thread image acquired for pi = 8, s = 0 | (t-t_start) =  10.18 
+	 	 processImage thread image acquired for pi = 9, s = 0 | (t-t_start) =  11.31 
+batch 0 concluded at 2023_09_29-18_56_24 
+Active Threads: [<_MainThread(MainThread, started 22172)>, <Thread(Thread-22 (dataAcquisitionLoop), started 33236)>, <Thread(Thread-23 (movingAverageBatch), started 22288)>] 
+batch 1 started at 2023_09_29-18_56_24 
+	 scan 1 (bi = 0) started at 2023_09_29-18_56_24 
+movingAverageBatch thread completed for b = 0 at 2023_09_29-18_56_24 
+	 	 processImage thread image acquired for pi = 0, s = 1 | (t-t_start) =  12.49 
+	 	 processImage thread image acquired for pi = 1, s = 1 | (t-t_start) =  13.61 
+	 	 processImage thread image acquired for pi = 2, s = 1 | (t-t_start) =  14.71 
+	 	 processImage thread image acquired for pi = 3, s = 1 | (t-t_start) =  15.85 
+	 	 processImage thread image acquired for pi = 4, s = 1 | (t-t_start) =  16.98 
+	 	 processImage thread image acquired for pi = 5, s = 1 | (t-t_start) =  18.11 
+	 	 processImage thread image acquired for pi = 6, s = 1 | (t-t_start) =  19.25 
+	 	 processImage thread image acquired for pi = 7, s = 1 | (t-t_start) =  20.38 
+	 	 processImage thread image acquired for pi = 8, s = 1 | (t-t_start) =  21.51 
+	 	 processImage thread image acquired for pi = 9, s = 1 | (t-t_start) =  22.65 
+batch 1 concluded at 2023_09_29-18_56_36 
+Active Threads: [<_MainThread(MainThread, started 22172)>, <Thread(Thread-22 (dataAcquisitionLoop), started 33236)>, <Thread(Thread-24 (movingAverageBatch), started 15900)>] 
+batch 2 started at 2023_09_29-18_56_36 
+	 scan 2 (bi = 0) started at 2023_09_29-18_56_36 
+movingAverageBatch thread completed for b = 1 at 2023_09_29-18_56_36 
+	 	 processImage thread image acquired for pi = 0, s = 2 | (t-t_start) =  23.83 
+	 	 processImage thread image acquired for pi = 1, s = 2 | (t-t_start) =  24.94 
+	 	 processImage thread image acquired for pi = 2, s = 2 | (t-t_start) =  26.07 
+	 	 processImage thread image acquired for pi = 3, s = 2 | (t-t_start) =  27.2 
+	 	 processImage thread image acquired for pi = 4, s = 2 | (t-t_start) =  28.32 
+	 	 processImage thread image acquired for pi = 5, s = 2 | (t-t_start) =  29.45 
+	 	 processImage thread image acquired for pi = 6, s = 2 | (t-t_start) =  30.58 
+	 	 processImage thread image acquired for pi = 7, s = 2 | (t-t_start) =  31.7 
+	 	 processImage thread image acquired for pi = 8, s = 2 | (t-t_start) =  32.83 
+	 	 processImage thread image acquired for pi = 9, s = 2 | (t-t_start) =  33.96 
+batch 2 concluded at 2023_09_29-18_56_47 
+Active Threads: [<_MainThread(MainThread, started 22172)>, <Thread(Thread-22 (dataAcquisitionLoop), started 33236)>, <Thread(Thread-25 (movingAverageBatch), started 29436)>] 
+batch 3 started at 2023_09_29-18_56_47 
+	 scan 3 (bi = 0) started at 2023_09_29-18_56_47 
+movingAverageBatch thread completed for b = 2 at 2023_09_29-18_56_47 
+	 	 processImage thread image acquired for pi = 0, s = 3 | (t-t_start) =  35.14 
+	 	 processImage thread image acquired for pi = 1, s = 3 | (t-t_start) =  36.24 
+	 	 processImage thread image acquired for pi = 2, s = 3 | (t-t_start) =  37.37 
+	 	 processImage thread image acquired for pi = 3, s = 3 | (t-t_start) =  38.51 
+	 	 processImage thread image acquired for pi = 4, s = 3 | (t-t_start) =  39.64 
+	 	 processImage thread image acquired for pi = 5, s = 3 | (t-t_start) =  40.78 
+	 	 processImage thread image acquired for pi = 6, s = 3 | (t-t_start) =  41.91 
+	 	 processImage thread image acquired for pi = 7, s = 3 | (t-t_start) =  43.02 
+	 	 processImage thread image acquired for pi = 8, s = 3 | (t-t_start) =  44.15 
+	 	 processImage thread image acquired for pi = 9, s = 3 | (t-t_start) =  45.28 
+batch 3 concluded at 2023_09_29-18_56_58 
+Active Threads: [<_MainThread(MainThread, started 22172)>, <Thread(Thread-22 (dataAcquisitionLoop), started 33236)>, <Thread(Thread-26 (movingAverageBatch), started 34148)>] 
+batch 4 started at 2023_09_29-18_56_58 
+	 scan 4 (bi = 0) started at 2023_09_29-18_56_58 
+movingAverageBatch thread completed for b = 3 at 2023_09_29-18_56_58 
+	 	 processImage thread image acquired for pi = 0, s = 4 | (t-t_start) =  46.47 
+	 	 processImage thread image acquired for pi = 1, s = 4 | (t-t_start) =  47.57 
+	 	 processImage thread image acquired for pi = 2, s = 4 | (t-t_start) =  48.7 
+	 	 processImage thread image acquired for pi = 3, s = 4 | (t-t_start) =  49.83 
+	 	 processImage thread image acquired for pi = 4, s = 4 | (t-t_start) =  50.95 
+	 	 processImage thread image acquired for pi = 5, s = 4 | (t-t_start) =  52.08 
+	 	 processImage thread image acquired for pi = 6, s = 4 | (t-t_start) =  53.2 
+	 	 processImage thread image acquired for pi = 7, s = 4 | (t-t_start) =  54.33 
+	 	 processImage thread image acquired for pi = 8, s = 4 | (t-t_start) =  55.46 
+	 	 processImage thread image acquired for pi = 9, s = 4 | (t-t_start) =  56.58 
+batch 4 concluded at 2023_09_29-18_57_10 
+Active Threads: [<_MainThread(MainThread, started 22172)>, <Thread(Thread-22 (dataAcquisitionLoop), started 33236)>, <Thread(Thread-27 (movingAverageBatch), started 14916)>] 
+batch 5 started at 2023_09_29-18_57_10 
+	 scan 5 (bi = 0) started at 2023_09_29-18_57_10 
+movingAverageBatch thread completed for b = 4 at 2023_09_29-18_57_10 
+	 	 processImage thread image acquired for pi = 0, s = 5 | (t-t_start) =  57.76 
+	 	 processImage thread image acquired for pi = 1, s = 5 | (t-t_start) =  58.9 
+	 	 processImage thread image acquired for pi = 2, s = 5 | (t-t_start) =  60.03 
+	 	 processImage thread image acquired for pi = 3, s = 5 | (t-t_start) =  61.16 
+	 	 processImage thread image acquired for pi = 4, s = 5 | (t-t_start) =  62.29 
+	 	 processImage thread image acquired for pi = 5, s = 5 | (t-t_start) =  63.42 
+	 	 processImage thread image acquired for pi = 6, s = 5 | (t-t_start) =  64.54 
+	 	 processImage thread image acquired for pi = 7, s = 5 | (t-t_start) =  65.67 
+	 	 processImage thread image acquired for pi = 8, s = 5 | (t-t_start) =  66.8 
+	 	 processImage thread image acquired for pi = 9, s = 5 | (t-t_start) =  67.92 
+batch 5 concluded at 2023_09_29-18_57_21 
+Active Threads: [<_MainThread(MainThread, started 22172)>, <Thread(Thread-22 (dataAcquisitionLoop), started 33236)>, <Thread(Thread-28 (movingAverageBatch), started 36156)>] 
+batch 6 started at 2023_09_29-18_57_21 
+	 scan 6 (bi = 0) started at 2023_09_29-18_57_21 
+movingAverageBatch thread completed for b = 5 at 2023_09_29-18_57_21 
+	 	 processImage thread image acquired for pi = 0, s = 6 | (t-t_start) =  69.11 
+	 	 processImage thread image acquired for pi = 1, s = 6 | (t-t_start) =  70.24 
+	 	 processImage thread image acquired for pi = 2, s = 6 | (t-t_start) =  71.37 
+	 	 processImage thread image acquired for pi = 3, s = 6 | (t-t_start) =  72.5 
+	 	 processImage thread image acquired for pi = 4, s = 6 | (t-t_start) =  73.63 
+	 	 processImage thread image acquired for pi = 5, s = 6 | (t-t_start) =  74.76 
+	 	 processImage thread image acquired for pi = 6, s = 6 | (t-t_start) =  75.88 
+	 	 processImage thread image acquired for pi = 7, s = 6 | (t-t_start) =  77.01 
+	 	 processImage thread image acquired for pi = 8, s = 6 | (t-t_start) =  78.14 
+	 	 processImage thread image acquired for pi = 9, s = 6 | (t-t_start) =  79.27 
+batch 6 concluded at 2023_09_29-18_57_32 
+Active Threads: [<_MainThread(MainThread, started 22172)>, <Thread(Thread-22 (dataAcquisitionLoop), started 33236)>, <Thread(Thread-29 (movingAverageBatch), started 25248)>] 
+batch 7 started at 2023_09_29-18_57_32 
+	 scan 7 (bi = 0) started at 2023_09_29-18_57_32 
+movingAverageBatch thread completed for b = 6 at 2023_09_29-18_57_32 
+	 	 processImage thread image acquired for pi = 0, s = 7 | (t-t_start) =  80.45 
+	 	 processImage thread image acquired for pi = 1, s = 7 | (t-t_start) =  81.58 
+	 	 processImage thread image acquired for pi = 2, s = 7 | (t-t_start) =  82.71 
+	 	 processImage thread image acquired for pi = 3, s = 7 | (t-t_start) =  83.84 
+	 	 processImage thread image acquired for pi = 4, s = 7 | (t-t_start) =  84.97 
+	 	 processImage thread image acquired for pi = 5, s = 7 | (t-t_start) =  86.09 
+	 	 processImage thread image acquired for pi = 6, s = 7 | (t-t_start) =  87.22 
+	 	 processImage thread image acquired for pi = 7, s = 7 | (t-t_start) =  88.34 
+	 	 processImage thread image acquired for pi = 8, s = 7 | (t-t_start) =  89.47 
+	 	 processImage thread image acquired for pi = 9, s = 7 | (t-t_start) =  90.6 
+batch 7 concluded at 2023_09_29-18_57_44 
+Active Threads: [<_MainThread(MainThread, started 22172)>, <Thread(Thread-22 (dataAcquisitionLoop), started 33236)>, <Thread(Thread-30 (movingAverageBatch), started 12588)>] 
+batch 8 started at 2023_09_29-18_57_44 
+	 scan 8 (bi = 0) started at 2023_09_29-18_57_44 
+movingAverageBatch thread completed for b = 7 at 2023_09_29-18_57_44 
+	 	 processImage thread image acquired for pi = 0, s = 8 | (t-t_start) =  91.78 
+	 	 processImage thread image acquired for pi = 1, s = 8 | (t-t_start) =  92.91 
+	 	 processImage thread image acquired for pi = 2, s = 8 | (t-t_start) =  94.04 
+	 	 processImage thread image acquired for pi = 3, s = 8 | (t-t_start) =  95.18 
+	 	 processImage thread image acquired for pi = 4, s = 8 | (t-t_start) =  96.31 
+	 	 processImage thread image acquired for pi = 5, s = 8 | (t-t_start) =  97.44 
+	 	 processImage thread image acquired for pi = 6, s = 8 | (t-t_start) =  98.57 
+	 	 processImage thread image acquired for pi = 7, s = 8 | (t-t_start) =  99.7 
+	 	 processImage thread image acquired for pi = 8, s = 8 | (t-t_start) =  100.83 
+	 	 processImage thread image acquired for pi = 9, s = 8 | (t-t_start) =  101.96 
+batch 8 concluded at 2023_09_29-18_57_55 
+Active Threads: [<_MainThread(MainThread, started 22172)>, <Thread(Thread-22 (dataAcquisitionLoop), started 33236)>, <Thread(Thread-31 (movingAverageBatch), started 11216)>] 
+batch 9 started at 2023_09_29-18_57_55 
+	 scan 9 (bi = 0) started at 2023_09_29-18_57_55 
+movingAverageBatch thread completed for b = 8 at 2023_09_29-18_57_55 
+	 	 processImage thread image acquired for pi = 0, s = 9 | (t-t_start) =  103.14 
+	 	 processImage thread image acquired for pi = 1, s = 9 | (t-t_start) =  104.27 
+	 	 processImage thread image acquired for pi = 2, s = 9 | (t-t_start) =  105.4 
+	 	 processImage thread image acquired for pi = 3, s = 9 | (t-t_start) =  106.53 
+	 	 processImage thread image acquired for pi = 4, s = 9 | (t-t_start) =  107.67 
+	 	 processImage thread image acquired for pi = 5, s = 9 | (t-t_start) =  108.8 
+	 	 processImage thread image acquired for pi = 6, s = 9 | (t-t_start) =  109.93 
+	 	 processImage thread image acquired for pi = 7, s = 9 | (t-t_start) =  111.05 
+	 	 processImage thread image acquired for pi = 8, s = 9 | (t-t_start) =  112.18 
+	 	 processImage thread image acquired for pi = 9, s = 9 | (t-t_start) =  113.31 
+batch 9 concluded at 2023_09_29-18_58_06 
+Active Threads: [<_MainThread(MainThread, started 22172)>, <Thread(Thread-22 (dataAcquisitionLoop), started 33236)>, <Thread(Thread-32 (movingAverageBatch), started 11076)>] 
+batch 10 started at 2023_09_29-18_58_06 
+	 scan 10 (bi = 0) started at 2023_09_29-18_58_06 
+movingAverageBatch thread completed for b = 9 at 2023_09_29-18_58_06 
+	 	 processImage thread image acquired for pi = 0, s = 10 | (t-t_start) =  114.49 
+	 	 processImage thread image acquired for pi = 1, s = 10 | (t-t_start) =  115.62 
+	 	 processImage thread image acquired for pi = 2, s = 10 | (t-t_start) =  116.75 
+	 	 processImage thread image acquired for pi = 3, s = 10 | (t-t_start) =  117.88 
+	 	 processImage thread image acquired for pi = 4, s = 10 | (t-t_start) =  119.01 
+	 	 processImage thread image acquired for pi = 5, s = 10 | (t-t_start) =  120.14 
+	 	 processImage thread image acquired for pi = 6, s = 10 | (t-t_start) =  121.27 
+	 	 processImage thread image acquired for pi = 7, s = 10 | (t-t_start) =  122.39 
+	 	 processImage thread image acquired for pi = 8, s = 10 | (t-t_start) =  123.52 
+	 	 processImage thread image acquired for pi = 9, s = 10 | (t-t_start) =  124.64 
+batch 10 concluded at 2023_09_29-18_58_18 
+Active Threads: [<_MainThread(MainThread, started 22172)>, <Thread(Thread-22 (dataAcquisitionLoop), started 33236)>, <Thread(Thread-33 (movingAverageBatch), started 9172)>] 
+batch 11 started at 2023_09_29-18_58_18 
+	 scan 11 (bi = 0) started at 2023_09_29-18_58_18 
+movingAverageBatch thread completed for b = 10 at 2023_09_29-18_58_18 
+	 	 processImage thread image acquired for pi = 0, s = 11 | (t-t_start) =  125.82 
+	 	 processImage thread image acquired for pi = 1, s = 11 | (t-t_start) =  126.96 
+	 	 processImage thread image acquired for pi = 2, s = 11 | (t-t_start) =  128.09 
+	 	 processImage thread image acquired for pi = 3, s = 11 | (t-t_start) =  129.22 
+	 	 processImage thread image acquired for pi = 4, s = 11 | (t-t_start) =  130.35 
+	 	 processImage thread image acquired for pi = 5, s = 11 | (t-t_start) =  131.45 
+	 	 processImage thread image acquired for pi = 6, s = 11 | (t-t_start) =  132.58 
+	 	 processImage thread image acquired for pi = 7, s = 11 | (t-t_start) =  133.71 
+	 	 processImage thread image acquired for pi = 8, s = 11 | (t-t_start) =  134.84 
+	 	 processImage thread image acquired for pi = 9, s = 11 | (t-t_start) =  135.97 
+batch 11 concluded at 2023_09_29-18_58_29 
+Active Threads: [<_MainThread(MainThread, started 22172)>, <Thread(Thread-22 (dataAcquisitionLoop), started 33236)>, <Thread(Thread-34 (movingAverageBatch), started 25164)>] 
+batch 12 started at 2023_09_29-18_58_29 
+	 scan 12 (bi = 0) started at 2023_09_29-18_58_29 
+movingAverageBatch thread completed for b = 11 at 2023_09_29-18_58_29 
+	 	 processImage thread image acquired for pi = 0, s = 12 | (t-t_start) =  137.16 
+	 	 processImage thread image acquired for pi = 1, s = 12 | (t-t_start) =  138.29 
+	 	 processImage thread image acquired for pi = 2, s = 12 | (t-t_start) =  139.39 
+	 	 processImage thread image acquired for pi = 3, s = 12 | (t-t_start) =  140.52 
+	 	 processImage thread image acquired for pi = 4, s = 12 | (t-t_start) =  141.65 
+	 	 processImage thread image acquired for pi = 5, s = 12 | (t-t_start) =  142.78 
+	 	 processImage thread image acquired for pi = 6, s = 12 | (t-t_start) =  143.9 
+	 	 processImage thread image acquired for pi = 7, s = 12 | (t-t_start) =  145.01 
+	 	 processImage thread image acquired for pi = 8, s = 12 | (t-t_start) =  146.15 
+	 	 processImage thread image acquired for pi = 9, s = 12 | (t-t_start) =  147.27 
+batch 12 concluded at 2023_09_29-18_58_40 
+Active Threads: [<_MainThread(MainThread, started 22172)>, <Thread(Thread-22 (dataAcquisitionLoop), started 33236)>, <Thread(Thread-35 (movingAverageBatch), started 3380)>] 
+batch 13 started at 2023_09_29-18_58_40 
+	 scan 13 (bi = 0) started at 2023_09_29-18_58_40 
+movingAverageBatch thread completed for b = 12 at 2023_09_29-18_58_40 
+	 	 processImage thread image acquired for pi = 0, s = 13 | (t-t_start) =  148.46 
+	 	 processImage thread image acquired for pi = 1, s = 13 | (t-t_start) =  149.59 
+	 	 processImage thread image acquired for pi = 2, s = 13 | (t-t_start) =  150.72 
+	 	 processImage thread image acquired for pi = 3, s = 13 | (t-t_start) =  151.85 
+	 	 processImage thread image acquired for pi = 4, s = 13 | (t-t_start) =  152.98 
+	 	 processImage thread image acquired for pi = 5, s = 13 | (t-t_start) =  154.11 
+	 	 processImage thread image acquired for pi = 6, s = 13 | (t-t_start) =  155.24 
+	 	 processImage thread image acquired for pi = 7, s = 13 | (t-t_start) =  156.37 
+	 	 processImage thread image acquired for pi = 8, s = 13 | (t-t_start) =  157.5 
+	 	 processImage thread image acquired for pi = 9, s = 13 | (t-t_start) =  158.63 
+batch 13 concluded at 2023_09_29-18_58_52 
+Active Threads: [<_MainThread(MainThread, started 22172)>, <Thread(Thread-22 (dataAcquisitionLoop), started 33236)>, <Thread(Thread-36 (movingAverageBatch), started 24904)>] 
+batch 14 started at 2023_09_29-18_58_52 
+	 scan 14 (bi = 0) started at 2023_09_29-18_58_52 
+movingAverageBatch thread completed for b = 13 at 2023_09_29-18_58_52 
+	 	 processImage thread image acquired for pi = 0, s = 14 | (t-t_start) =  159.81 
+	 	 processImage thread image acquired for pi = 1, s = 14 | (t-t_start) =  160.94 
+	 	 processImage thread image acquired for pi = 2, s = 14 | (t-t_start) =  162.07 
+	 	 processImage thread image acquired for pi = 3, s = 14 | (t-t_start) =  163.2 
+	 	 processImage thread image acquired for pi = 4, s = 14 | (t-t_start) =  164.33 
+	 	 processImage thread image acquired for pi = 5, s = 14 | (t-t_start) =  165.45 
+	 	 processImage thread image acquired for pi = 6, s = 14 | (t-t_start) =  166.58 
+	 	 processImage thread image acquired for pi = 7, s = 14 | (t-t_start) =  167.71 
+	 	 processImage thread image acquired for pi = 8, s = 14 | (t-t_start) =  168.83 
+	 	 processImage thread image acquired for pi = 9, s = 14 | (t-t_start) =  169.96 
+movingAverageBatch thread completed for b = 14 at 2023_09_29-18_59_03 

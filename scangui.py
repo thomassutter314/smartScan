@@ -18,6 +18,18 @@ It should be able to:
 
 """
 
+TESTING = True
+
+if TESTING == False:
+    import PySpin
+    import clr
+    from clr import System
+    full_filename = r'C:\Windows\Microsoft.NET\assembly\GAC_64\Newport.DLS.CommandInterface\v4.0_1.0.1.0__90ac4f829985d2bf\Newport.DLS.CommandInterface.dll'
+    clr.AddReference(full_filename)
+    from CommandInterfaceDLS import *
+else:
+    print('TESTING = True')
+
 import tkinter as tk
 from tkinter import filedialog as fd
 from tkinter import ttk
@@ -52,13 +64,7 @@ import tifffile
 import json
 import os
 import io
-import PySpin
 import sys
-import clr
-from clr import System
-full_filename = r'C:\Windows\Microsoft.NET\assembly\GAC_64\Newport.DLS.CommandInterface\v4.0_1.0.1.0__90ac4f829985d2bf\Newport.DLS.CommandInterface.dll'
-clr.AddReference(full_filename)
-from CommandInterfaceDLS import *
 
 import translationcorr as tc
 
@@ -91,7 +97,7 @@ def popupmsg(msg):
     label.pack(side="top", fill="x", pady=10)
     B1 = ttk.Button(popup, text="Okay", command = popup.destroy)
     B1.pack()
-    popup.mainloop()
+    # ~ popup.mainloop()
 
 def update_errorbar(errobj, x, y, xerr=None, yerr=None):
     ln, caps, bars = errobj
@@ -149,51 +155,6 @@ def update_errorbar(errobj, x, y, xerr=None, yerr=None):
     except NameError:
         pass
 
-class RoiRectangle():
-    def __init__(self,cx,cy,w,h,ax):
-        self.cx = cx
-        self.cy = cy
-        self.w = w
-        self.h = h
-        tl_x = self.cx - w/2
-        tl_y = self.cy - h/2
-        self.patch = patches.Rectangle((tl_x, tl_y), self.w, self.h, linewidth=1, edgecolor='r', facecolor='none', alpha=0.8)
-        self.live = False
-        
-        self.cRadius = 1
-        # ~ self.cpatch = patches.Circle((self.cx,self.cy),self.cRadius, edgecolor=(1, 0, 0, 0.5), facecolor=(1, 0, 0, 1),fill=False)
-        
-        ax.add_patch(self.patch) # Add the patch to the axis
-        # ~ ax.add_patch(self.cpatch) # Add the center patch to the axis
-    
-    def updateShape(self, w, h,):
-        self.w = w
-        self.h = h
-        tl_x = self.cx - w/2
-        tl_y = self.cy - h/2
-        self.patch.set_xy((tl_x,tl_y)) # Update patch top left corner
-        self.patch.set_width(w) # Update the patch with new width
-        self.patch.set_height(h) # Update the patch with new height
-    
-    def goLive(self):
-        if self.w < 1:
-            self.w = 1 # Minimum width is a single pixel
-        if self.h < 1:
-            self.h = 1 # Minimum height is a single pixel
-        tl_x = self.cx - self.w/2
-        tl_y = self.cy - self.h/2
-        self.patch.set_xy((tl_x,tl_y)) # Update patch top left corner
-        self.patch.set_width(self.w) # Update the patch with new width
-        self.patch.set_height(self.h) # Update the patch with new height
-        self.live = True
-        
-    def updateAxis(self, ax):
-        del self.patch
-        tl_x = self.cx - self.w/2
-        tl_y = self.cy - self.h/2
-        self.patch = patches.Rectangle((tl_x, tl_y), self.w, self.h, linewidth=1, edgecolor='r', facecolor='none', alpha=0.8)
-        ax.add_patch(self.patch) # Add the patch to the axis
-
 class DelayStage():    
     def __init__(self):
         #import System
@@ -217,7 +178,7 @@ class DelayStage():
         self.pos = self.myDLS.PA_Get(self.pos, self.errorStatus)[1]
         #print('pos = %s' % str(self.pos))
         return self.pos
-    def setPos(self,newPos):
+    def setPos(self, newPos):
         if (newPos > 0) and (newPos < 225):
             self.myDLS.PA_Set(newPos,self.errorStatus)
             #self.pos = newPos
@@ -402,6 +363,7 @@ class Camera():
         return result
         
     def disconnect(self):
+        self.camera.cam.EndAcquisition()
         del self.cam
         self.cam_list.Clear()
         self.system.ReleaseInstance()
@@ -480,7 +442,106 @@ class Camera():
             return True
         except:
             return False
-      
+
+class pseudoDelayStage():
+    def __init__(self):
+        print('This is a pseudo Delay Stage for testing')
+        self.pos = 0
+    def disconnect(self):
+        print('This is a pseudo Delay Stage for testing')
+    def getPos(self):
+        return self.pos
+    def setPos(self, newPos):
+        if (newPos > 0) and (newPos < 225):
+            self.pos = newPos
+        else:
+            print('Invalid Input Position; DS motion denied')
+
+class pseudoCamera():
+    def __init__(self):
+        self.triggerTimer = time.time()
+        self.triggered = False
+        self.pseudoExposure = 1
+        self.pseudoGain = 1
+        self.pseudoWait = 1/30
+        self.print_device_info()
+        self.counter = 0
+    def print_device_info(self):
+        print('This is a fake camera for testing the program')
+    def disconnect(self):
+        print('This is a fake camera for testing the program')
+    def trigger(self):
+        # Record the time of this trigger so that we can make the pseudo camera behave realistically
+        self.triggerTimer = time.time()
+        if self.triggered == False:
+            self.triggered = True
+        else:
+            print('Attempting to trigger the camera while it is already triggered')
+    def grabImage(self):
+        while (self.triggered == False) or ((time.time()-self.triggerTimer) < self.pseudoExposure):
+            time.sleep(self.pseudoWait)
+        self.triggered = False
+        self.counter += 1
+        return  np.array((self.counter%11)*10000*np.random.random([500,500]), dtype = 'uint16')
+    def getExposure(self):
+        return self.pseudoExposure
+    def getGain(self):
+        return self.pseudoGain
+    def setExposure(self,setValueSecond):
+        self.pseudoExposure = setValueSecond
+    def setGain(self,setValue):
+        self.pseudoGain = setValue
+
+if TESTING == True:
+    # In test mode we redefine these classes as test objects that don't connect to anything
+    Camera = pseudoCamera
+    DelayStage = pseudoDelayStage
+    
+class RoiRectangle():
+    def __init__(self,cx,cy,w,h,ax):
+        self.cx = cx
+        self.cy = cy
+        self.w = w
+        self.h = h
+        tl_x = self.cx - w/2
+        tl_y = self.cy - h/2
+        self.patch = patches.Rectangle((tl_x, tl_y), self.w, self.h, linewidth=1, edgecolor='r', facecolor='none', alpha=0.8)
+        self.live = False
+        
+        self.cRadius = 1
+        # ~ self.cpatch = patches.Circle((self.cx,self.cy),self.cRadius, edgecolor=(1, 0, 0, 0.5), facecolor=(1, 0, 0, 1),fill=False)
+        
+        ax.add_patch(self.patch) # Add the patch to the axis
+        # ~ ax.add_patch(self.cpatch) # Add the center patch to the axis
+    
+    def updateShape(self, w, h,):
+        self.w = w
+        self.h = h
+        tl_x = self.cx - w/2
+        tl_y = self.cy - h/2
+        self.patch.set_xy((tl_x,tl_y)) # Update patch top left corner
+        self.patch.set_width(w) # Update the patch with new width
+        self.patch.set_height(h) # Update the patch with new height
+    
+    def goLive(self):
+        if self.w < 1:
+            self.w = 1 # Minimum width is a single pixel
+        if self.h < 1:
+            self.h = 1 # Minimum height is a single pixel
+        tl_x = self.cx - self.w/2
+        tl_y = self.cy - self.h/2
+        self.patch.set_xy((tl_x,tl_y)) # Update patch top left corner
+        self.patch.set_width(self.w) # Update the patch with new width
+        self.patch.set_height(self.h) # Update the patch with new height
+        self.live = True
+        
+    def updateAxis(self, ax):
+        del self.patch
+        tl_x = self.cx - self.w/2
+        tl_y = self.cy - self.h/2
+        self.patch = patches.Rectangle((tl_x, tl_y), self.w, self.h, linewidth=1, edgecolor='r', facecolor='none', alpha=0.8)
+        ax.add_patch(self.patch) # Add the patch to the axis
+
 class SetupApp():
     def __init__(self, wait = .033):
         # Setup the tkinter GUI window
@@ -565,14 +626,16 @@ class SetupApp():
         self.roiSelection.set("roi rectangle") # default value
         add_roi_button = tk.OptionMenu(self.controls, self.roiSelection, "line profile", "roi rectangle")
         def saveRoisButtonFunc():
-            print('Saved ROIS')
+            defaultFileName = 'rois.txt'
+            fileLoc = tk.filedialog.asksaveasfile(mode='w',initialfile=defaultFileName,defaultextension=".*",filetypes = [("text files", ".txt")])
             roiDict = {}
             roiDict['#'] = ['cx','cy','w','h']
             for i in range(len(self.rm)):
                 roiDict[i] = [self.rm[i].cx,self.rm[i].cy,self.rm[i].w,self.rm[i].h]
-            with open('rois.txt','w') as rf:
+            with open(fileLoc.name,'w') as rf:
                 for key, value in roiDict.items():
                     rf.write('%s:%s\n' % (key, value))
+            print('Saved ROIS')
         self.saveRoisButton = tk.Button(
             master=self.controls,
             text="Save ROIS",
@@ -586,8 +649,9 @@ class SetupApp():
                 self.rm[i].patch.remove() # Remove the patch from the plot
                 del self.rm[i].patch # Delete the patch
             self.rm = [] # make rm an empty list
+            fileLoc = tk.filedialog.askopenfile(mode='r',filetypes =[('text files', '*.txt')])
             # Load the new ROIS from the file
-            with open('rois.txt','r') as rf:
+            with open(fileLoc.name,'r') as rf:
                 for line in rf:
                     if line[:line.find(":")] != '#':
                         cx,cy,w,h = list(map(int,json.loads(line[line.find(":")+1:].replace('\n',''))))
@@ -648,8 +712,9 @@ class SetupApp():
             
             # If the update is substantive, then write the new values to the GUI and set a ticket for the physical camera settings to be updated at next opportunity.
             if (abs(self.gain - self.camera.getGain()) > .001) or (abs(self.exposure - self.camera.getExposure()) > .001):
-                self.gain_label_string.set(f'Gain = {self.camera.getGain()} dB')
-                self.exposure_label_string.set(f'Exposure = {self.camera.getExposure()} s')
+                print('Updating Camera Settings')
+                self.gain_label_string.set(f'Gain = {self.gain} dB')
+                self.exposure_label_string.set(f'Exposure = {self.exposure} s')
                 self.camSettingsUpdateInProgress = True
             
         self.camSettingsButton = tk.Button(
@@ -669,7 +734,6 @@ class SetupApp():
         def dsPos1ButtonFunc():
             dsPos = float(self.dsPos1Entry.get())
             self.ds.setPos(dsPos)
-            time.sleep(self.dsWait)
             self.currentDsPos_label_string.set(f'Current dsPos = {self.ds.getPos()}')
             
         self.dsPos1Entry = tk.Entry(master=self.controls,width=entryWidth)
@@ -685,7 +749,6 @@ class SetupApp():
         def dsPos2ButtonFunc():
             dsPos = float(self.dsPos2Entry.get())
             self.ds.setPos(dsPos)
-            time.sleep(self.dsWait)
             self.currentDsPos_label_string.set(f'Current dsPos = {self.ds.getPos()}')
             
         self.dsPos2Entry = tk.Entry(master=self.controls,width=entryWidth)
@@ -741,8 +804,9 @@ class SetupApp():
                 popupmsg('Please select a valid scan directory for storing data')
                 return
             if len(self.rm) == 0:
-                popupmsg('Please select an roi before starting')
-                return
+                print('No ROI selections, setting full image as ROI')
+                self.rm.append(RoiRectangle(self.w//2,self.h//2,self.w,self.h,self.camAx[0]))
+                self.rm[-1].goLive() # Set the roi that was just generated to live status
             self.camLive = 2
             
         self.startScanButton = tk.Button(
@@ -930,12 +994,8 @@ class SetupApp():
         self.thrDataAcquisition = threading.Thread(target=self.dataAcquisitionLoop, args=(), kwargs={})
         self.thrDataAcquisition.start() # Will run takeImageTestRepeat
         
-        print('check point 0')
-        
         self.root.protocol("WM_DELETE_WINDOW", on_closing)
         self.root.mainloop()
-        
-        print('checkpoint 1')
         
         # If 2 we start a scan
         if self.camLive == 2:
@@ -973,7 +1033,6 @@ class SetupApp():
             #  Ending acquisition appropriately helps ensure that devices clean up
             #  properly and do not need to be power-cycled to maintain integrity.
             self.camera.setExposure(1) # Reset exposure to 1.0 s and disconnect from the camera.
-            self.camera.cam.EndAcquisition()
             self.camera.disconnect() # disconnect from camera
       
     def camonclick(self,event):
@@ -1227,7 +1286,6 @@ class SetupApp():
         
         # Grabs the image
         self.camImage = self.camera.grabImage()
-        print('Image Finished')
         
 class ScanApp():
     def __init__(self, camera, ds, dsPositions, batchSize, translationCorrectionQ, smartScanQ, scanDir, tzpos, rm, dsWait = 0.1, wait = .033):
@@ -1287,32 +1345,18 @@ class ScanApp():
         self.camAx.set_yticks([])
         
         # Put the rois on the new cam fig
-        for r in rm:
+        for r in self.rm:
             r.updateAxis(self.camAx)
-        
-        # SCAF
-        self.s = -1 # Counts the number of scans taken, +1 each run so starts on zero
-        self.b = -1 # Counts the number of batches taken, +1 each run so starts on zero
-        self.pi = 0 # Position index
         
         # Data type for saving images
         self.image_dtype = np.float32
         
-        print('checkpoint 2')
         # Sends the software trigger to the camera
         self.camera.trigger()
         
-        # collect the initial image
-        image_result = self.camera.cam.GetNextImage()
-        #  Ensure image completion
-        if image_result.IsIncomplete():
-            print('Image incomplete with image status %d ...' % image_result.GetImageStatus())
-        else:
-            # Getting the image data as a numpy array
-            self.camImage = image_result.GetNDArray()
-            self.h, self.w = self.camImage.shape
+        initImage = self.camera.grabImage()
             
-        self.zeroImage = np.zeros(np.shape(self.camImage),dtype=self.image_dtype)
+        self.zeroImage = np.zeros(np.shape(initImage),dtype=self.image_dtype) # A zero image that can be used later to generate empty initial files
         
         # If translation correction is active, find the initial reference location for later comparison
         self.tcorr_0 = np.zeros(2) # array that stores the reference position for translation correction
@@ -1323,7 +1367,7 @@ class ScanApp():
         for ri in range(len(self.rm)):
             r = self.rm[ri]
             # Get pixel data in the roi
-            roiImage = self.camImage[int(r.cy-r.h/2):int(r.cy+r.h/2),int(r.cx-r.w/2):int(r.cx+r.w/2)]
+            roiImage = initImage[int(r.cy-r.h/2):int(r.cy+r.h/2),int(r.cx-r.w/2):int(r.cx+r.w/2)]
             self.roiTotalArea += roiImage.shape[0]*roiImage.shape[1]
             # ~ tifffile.imwrite(self.scanDir + '//' + f'initialRoi_{ri}.tiff',roiImage)
             if self.translationCorrectionQ:
@@ -1343,26 +1387,25 @@ class ScanApp():
         self.roiScanData = np.zeros([1,len(self.dsPositions)]) # full record of intensity in the roi
         self.timeHistory = np.zeros([1,len(self.dsPositions)]) # coincident record of when data was taken
         
-        self.t0 = time.time()
-        self.t0start = datetime.datetime.now()
-        self.t0startString = self.t0start.strftime("%Y_%m_%d-%H_%M_%S")
-        self.t1 = self.t0
-        
         self.scanNumber_label_string = tk.StringVar()
-        self.scanNumber_label_string.set(f"scan # = {self.s}")
+        self.scanNumber_label_string.set(f"scan # = ...")
         self.scanNumber_label = tk.Label(master=self.controls,textvariable=self.scanNumber_label_string,bg=cntrlBg)
         
         self.batchNumber_label_string = tk.StringVar()
-        self.batchNumber_label_string.set(f"batch # = {self.b}")
+        self.batchNumber_label_string.set(f"batch # = ...")
         self.batchNumber_label = tk.Label(master=self.controls,textvariable=self.batchNumber_label_string,bg=cntrlBg)
         
         self.dsPosition_label_string = tk.StringVar()
-        self.dsPosition_label_string.set(f"dsPos = {self.ds.getPos()} mm")
+        self.dsPosition_label_string.set(f"dsPos = ... ")
         self.dsPosition_label = tk.Label(master=self.controls,textvariable=self.dsPosition_label_string,bg=cntrlBg)
         
         self.exposure_label_string = tk.StringVar()
         self.exposure_label_string.set(f'Exposure = {self.camera.getExposure()} s')
         self.exposure_label = tk.Label(master=self.controls,textvariable=self.exposure_label_string,bg=cntrlBg)
+        
+        self.gain_label_string = tk.StringVar()
+        self.gain_label_string.set(f'Gain = {self.camera.getGain()} dB')
+        self.gain_label = tk.Label(master=self.controls,textvariable=self.gain_label_string,bg=cntrlBg)
         
         def pauseScanButtonFunc():
             if self.paused == False:
@@ -1421,6 +1464,7 @@ class ScanApp():
         self.batchNumber_label.pack(pady=padySep)
         self.dsPosition_label.pack(pady=padySep)
         self.exposure_label.pack(pady=padySep)
+        self.gain_label.pack(pady=padySep)
         self.pauseScanButton.pack(pady=padySep)
         self.gentleStopButton.pack(pady=padySep)
         self.hardStopButton.pack(pady=padySep)
@@ -1430,16 +1474,16 @@ class ScanApp():
         ax_setVals = [plt.axes([0.15, 0.06, 0.5, 0.02]), plt.axes([0.15, 0.02, 0.5, 0.02])]
         
         # Check whether the image is 8bit or 16bit
-        if type(self.camImage[0,0]) == np.dtype('uint8'):
+        if type(initImage[0,0]) == np.dtype('uint8'):
             imageTypeMin, imageTypeMax = 0, 255
             print('Image Type is 8 bit')
-        elif type(self.camImage[0,0]) == np.dtype('uint16'):
+        elif type(initImage[0,0]) == np.dtype('uint16'):
             imageTypeMin, imageTypeMax = 0, 2**16-1
             print('Image Type is 16 bit')
         else:
-            print(f'Invalid Image Type: {type(self.camImage[0,0])}')
+            print(f'Invalid Image Type: {type(initImage[0,0])}')
             
-        imageCurrentMin, imageCurrentMax = np.min(self.camImage), np.max(self.camImage)
+        imageCurrentMin, imageCurrentMax = np.min(initImage), np.max(initImage)
  
         slider_vmax = matplotlib.widgets.Slider(ax_setVals[0], r'$v_{max}$', imageTypeMin, imageTypeMax, valinit=imageCurrentMax)
         slider_vmin = matplotlib.widgets.Slider(ax_setVals[1], r'$v_{min}$', imageTypeMin, imageTypeMax, valinit=imageCurrentMin)
@@ -1458,9 +1502,8 @@ class ScanApp():
         slider_vmax.on_changed(sliderUpdateVmax)
         slider_vmin.on_changed(sliderUpdateVmin)
         
-        # Plot the cam image and the line profile crosshairs
-        # SCAF
-        self.camImageObj = self.camAx.imshow(self.camImage)
+        # Plot the cam image
+        self.camImageObj = self.camAx.imshow(initImage)
         pos0 = self.camAx.get_position()
 
         # Attach the matplotlib image figures to a tkinter gui window
@@ -1488,7 +1531,7 @@ class ScanApp():
             self.scanLive = False
             self.root.quit()
             
-        # Activate the camera thread - this will take images on repeat asynchronously
+        # Activate the data acquisition loop
         self.scanLive = True
         self.camFree = False # Checks whether we have successfully disconnected from the camera at the end of the program
         self.dsFree = False # Checks whether we have successfully disconnected from the delay stage at the end of the program
@@ -1499,8 +1542,8 @@ class ScanApp():
         self.root.mainloop()
         
     def dataAcquisitionLoop(self):
-        now = datetime.datetime.now()
-        self.runLog += f'dataAcquisitionLoop started at {now.strftime("%Y_%m_%d-%H_%M_%S")} \n'
+        # Log the current time
+        self.runLog += f'dataAcquisitionLoop started at {datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")} \n'
         
         original_umask = os.umask(0)
         while os.path.isdir(f'{self.scanDir}//average'):
@@ -1514,51 +1557,53 @@ class ScanApp():
         os.makedirs(f'{self.scanDir}//average',self.dirPermission) # Create a directory for the batch average files
         os.umask(original_umask)
         
-        # Create the files of this batch average
+        # Create the files for the total average
         for p in range(len(self.dsPositions)):
             dsPos = self.dsPositions[p] # direction doesn't matter here; we just need the positions for the files names
             dsPosString = '%.4f' % dsPos
             tifffile.imwrite(f'{self.scanDir}//average//pos={dsPosString}.tiff',self.zeroImage)
-        
-        thrImage = None # Variable that contains the image analysis async thread
+
         thrBatchAverage = None # Variable that contains the moving batch average thread
-        ### Start the scan loop ###
+        
+        # Create the index variables
+        b = -1
+        s = -1
+        pi = -1
+        
+        # Make a string that records the formattted start time
+        self.t_startString = datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
+        
+        # Record the exact starting time
+        self.t_start = time.time()
+        t_lastImage = self.t_start # This variable will later be used to record when images finish
+        
+        ### Start the experiment loop ###
         while self.scanLive:
-            self.b += 1 # Record that a new batch is being taken, note that self.b is initiated at a value of -1
-            self.batchNumber_label_string.set(f"batch # = {self.b}") # Write the current batch number to the gui
-            # SCAF
-            os.makedirs(f'{self.scanDir}//batch{self.b}') # Create a directory for the new batch files
+            b += 1 # Record that a new batch is being taken, note that b is initiated at a value of -1
+            self.batchNumber_label_string.set(f"batch # = {b}") # Write the current batch number to the gui
             
+            os.makedirs(f'{self.scanDir}//batch{b}') # Create a directory for the new batch files
+        
             # Create the files of a new batch
             for p in range(len(self.dsPositions)):
                 dsPos = self.dsPositions[p] # direction doesn't matter here; we just need the positions for the files names
                 dsPosString = '%.4f' % dsPos
-                tifffile.imwrite(f'{self.scanDir}//batch{self.b}//pos={dsPosString}.tiff',self.zeroImage)
-                
-            now = datetime.datetime.now()
-            self.runLog += f'batch {self.b} started at {now.strftime("%Y_%m_%d-%H_%M_%S")} \n'
+                tifffile.imwrite(f'{self.scanDir}//batch{b}//pos={dsPosString}.tiff',self.zeroImage)
+            
+            # Log batch start time
+            self.runLog += f'batch {b} started at {datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")} \n'
+            
             ### Start the new batch ###
             for bi in range(self.batchSize):
-                self.s += 1 # Record that a new scan is being taken
-                self.scanNumber_label_string.set(f"scan # = {self.s}") # Write the current scan number to the gui
+                s += 1 # Record that a new scan is being taken, note that s is inititated at a value of -1
+                print(f's%self.batchSize = {s%self.batchSize}, bi = {bi}')
+                self.scanNumber_label_string.set(f"scan # = {s}") # Write the current scan number to the gui
                 
-                now = datetime.datetime.now()
-                self.runLog += f'\t scan {self.s} (bi = {bi}) started at {now.strftime("%Y_%m_%d-%H_%M_%S")} \n'
+                # Log scan start time
+                self.runLog += f'\t scan {s} (bi = {bi}) started at {datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")} \n'
+                
                 ### Start a new scan ###
                 for p in range(len(self.dsPositions)):
-                    # Before collecting a new position, check whether a hard stop call is active
-                    if self.hardStop:
-                        return self.endScan(weight = 0) #exits the dataAcquisitionLoop
-                    
-                    while self.paused:
-                        time.sleep(self.wait) # block here if paused
-                    
-                    # Compute the image rate
-                    deltaTString = '%.3f' % round(time.time()-self.t1,5)
-                    deltaETString = '%.3f' % round(time.time()-self.t1 - self.camera.exposure - self.dsWait,5)
-                    self.camTitle = self.camAx.set_title(f"Image Rate =  {deltaTString} s (et = {deltaETString} s)")
-                    self.t1 = time.time()
-                    
                     # ~ # Compute the next ds pos
                     # ~ if self.s%2==0:
                         # ~ self.pi = p
@@ -1568,8 +1613,8 @@ class ScanApp():
                         # ~ dsPos = self.dsPositions[self.pi] # if s is odd, go through the list backwards
                     
                     # One Direction Scan
-                    self.pi = p
-                    dsPos = self.dsPositions[self.pi]
+                    pi = p
+                    dsPos = self.dsPositions[pi]
                     
                     # Move to the next ds pos
                     self.ds.setPos(dsPos)
@@ -1583,41 +1628,52 @@ class ScanApp():
                     # Sends the software trigger to the camera
                     self.camera.trigger()
                     
-                    # Process previous image (that is the one taken before the currently running trigger)
-                    self.processImage(bi, self.pi, self.s, self.b)
+                    # Process previous image (that is the one taken before the currently running trigger), skip initial
+                    if p > 0:
+                        self.processImage(imageData, pi_prev, s, b, t_lastImage)
             
                     # ~ self.runLog += f'\t \t dsPos = {dsPos} mm, pi = {self.pi}, deltaT = {deltaTString}, ET = {deltaETString} \n'
                     
-                    # Get the new image from the camera
-                    self.camImage = self.grabImage()
+                    # Get the new image from the camera and record the parameters at the time of this image
+                    imageData, pi_prev = self.camera.grabImage(), pi
                     
-                    # ~ time.sleep(self.exposure)
+                    # Compute the image rate
+                    deltaTString = '%.3f' % round(time.time()-t_lastImage,5)
+                    deltaETString = '%.3f' % round(time.time()- t_lastImage - self.exposure - self.dsWait, 5)
+                    self.camTitle = self.camAx.set_title(f"Image Rate =  {deltaTString} s (et = {deltaETString} s)")
+                    t_lastImage = time.time()
                     
+                    # Before moving to next loop check hard stop and pause
+                    if self.hardStop:
+                        return self.endScan(0,s,b,imageData) #exits the dataAcquisitionLoop
+                    
+                    while self.paused:
+                        time.sleep(self.wait) # block here if paused
+
                 # This point in the loop occurs when a scan has concluded
-                # Make sure the image analysis thread is concluded so that it is safe to go forward in the data acquisition loop
-                if (thrImage != None) and (thrImage.is_alive()):
-                    print('Waiting on thrImage at the end of a scan!')
-                    thrImage.join()
+                # Process the last image of the scan
+                self.processImage(imageData, pi_prev, s, b, t_lastImage)
                     
                 # Update the lab time intensity monitor
                 self.intensityLabTime.append(0)
-                self.intensityLabTime[self.s] = np.mean(self.roiScanData[self.s,:]) # Update the lab time plot since the scan has ended
+                self.intensityLabTime[s] = np.mean(self.roiScanData[s,:]) # Update the lab time plot since the scan has ended
                 
                 # Before moving on to a new scan, check whether a gentle stop call is active
                 if self.gentleStop:
-                    return self.endScan(weight = (bi+1)/self.batchSize) #exits the dataAcquisitionLoop
+                    return self.endScan((bi+1)/self.batchSize, s, b, imageData) #exits the dataAcquisitionLoop
             
             # This point in the loop occurs when a batch has concluded
             # Make sure the previous batch moving average thread has concluded
             if (thrBatchAverage != None) and (thrBatchAverage.is_alive()):
                 print('Joining Batch Average Thread')
                 thrBatchAverage.join()
+                
             # Start the batch moving average thread
-            thrBatchAverage = threading.Thread(target=self.movingAverageBatch, args=(self.b,), kwargs={})
+            thrBatchAverage = threading.Thread(target=self.movingAverageBatch, args=(b,), kwargs={})
             thrBatchAverage.start()
             
             now = datetime.datetime.now()
-            self.runLog += f'batch {self.b} concluded at {now.strftime("%Y_%m_%d-%H_%M_%S")} \n'
+            self.runLog += f'batch {b} concluded at {now.strftime("%Y_%m_%d-%H_%M_%S")} \n'
             self.runLog += f'Active Threads: {threading.enumerate()} \n'
             
             # Save some things
@@ -1635,49 +1691,28 @@ class ScanApp():
                 self.runLogFileName = f'runLog_{now.strftime("%Y_%m_%d-%H_%M_%S")}.txt'
         
         self.endScan()
-        
-    def grabImage(self):
-        # get the new image from the camera, freezes here until the image becomes available
-        image_result = self.camera.cam.GetNextImage()
-        
-        #  Ensure image completion
-        if image_result.IsIncomplete():
-            print('Image incomplete with image status %d ...' % image_result.GetImageStatus())
-        else:
-            # Getting the image data as a numpy array
-            imageArray = image_result.GetNDArray()
-            
-        #  Images retrieved directly from the camera (i.e. non-converted
-        #  images) need to be released in order to keep from filling the
-        #  buffer.
-        image_result.Release()
-            
-        return imageArray
-        
-    def processImage(self, bi, pi, s, b):
-        t0 = time.time()
-        t_newImage = time.time()
-        dsPos = self.dsPositions[self.pi]
-        # ~ self.runLog += f'\t \t processImage thread image acquired for pi = {pi}, s = {s} | duration =  {round(time.time()-t0,2)} \n'
+    
+    def processImage(self, image, pi, s, b, t_image):
+        self.runLog += f'\t \t processImage thread image acquired for pi = {pi}, s = {s} | (t-t_start) =  {round(t_image-self.t_start,2)} \n'
         
         # Update the ROI data plots
         if len(self.rm) > 0:
             if self.translationCorrectionQ:
                 # Loop through all the ROIS
                 for r in self.rm:
-                    roiImage = self.camImage[int(r.cy-r.h/2):int(r.cy+r.h/2),int(r.cx-r.w/2):int(r.cx+r.w/2)]
+                    roiImage = image[int(r.cy-r.h/2):int(r.cy+r.h/2),int(r.cx-r.w/2):int(r.cx+r.w/2)]
                     popt, rms, self.guess_prms = tc.fitImageToGaussian(roiImage,prevFit=self.guess_prms)
                     self.tcorr += popt[:2]*roiImage.shape[0]*roiImage.shape[1]
                     
                 self.tcorr = self.tcorr/self.roiTotalArea
                 correction = np.array(self.tcorr_0 - self.tcorr,dtype=np.int32)
                 self.tcorr_log = np.append(self.tcorr_log,np.array([correction]),axis=0)
-                self.camImage = np.roll(self.camImage,correction,axis=[1,0]) # Apply translation correction to the image with cylic boundaries.
+                image = np.roll(image,correction,axis=[1,0]) # Apply translation correction to the image with cylic boundaries.
             
             roiPixelSum = 0
             for r in self.rm:
                 # Get pixel data in the roi
-                roiImage = self.camImage[int(r.cy-r.h/2):int(r.cy+r.h/2),int(r.cx-r.w/2):int(r.cx+r.w/2)]                                
+                roiImage = image[int(r.cy-r.h/2):int(r.cy+r.h/2),int(r.cx-r.w/2):int(r.cx+r.w/2)]                                
                 # get the sum inside all the rois and the roi total area, we will average with a normalization to area
                 roiPixelSum += np.sum(roiImage)
                 
@@ -1686,10 +1721,7 @@ class ScanApp():
                 self.timeHistory = np.append(self.timeHistory,np.zeros([1,len(self.dsPositions)]),axis=0)
             
             self.roiScanData[s,pi] = roiPixelSum/self.roiTotalArea
-            self.timeHistory[s,pi] = t_newImage - self.t0
-            
-            if s > 1:
-                print(abs(self.roiScanData[s,pi]-self.intensityScanTime[pi])/(self.stdIntensityScanTime[pi]*np.sqrt(len(self.roiScanData[:,pi]))))
+            self.timeHistory[s,pi] = t_image - self.t_start #SCAF
                 
             self.intensityScanTime[pi] = np.mean(self.roiScanData[:,pi])
             self.stdIntensityScanTime[pi] = np.std(self.roiScanData[:,pi])/np.sqrt(len(self.roiScanData[:,pi]))
@@ -1711,14 +1743,15 @@ class ScanApp():
         ## Draw the figures on the canvas and the data canvas
         
         # cam canvas
-        self.camImageObj.set_data(self.camImage)
+        self.camImageObj.set_data(image)
         self.canvas.draw()
         
         #SCAF
         # Load the image corresponding to this position from the current batch, update the moving average, save
-        dsPosString = '%.4f' % dsPos
+        dsPosString = '%.4f' % self.dsPositions[pi]
         imAvg = tifffile.imread(f'{self.scanDir}//batch{b}//pos={dsPosString}.tiff')
-        imAvg = np.array((self.camImage + bi*imAvg)/(bi+1),dtype=self.image_dtype) # moving average
+        bi_calc = s%self.batchSize
+        imAvg = np.array((image + bi_calc*imAvg)/(bi_calc+1),dtype=self.image_dtype) # moving average
         tifffile.imwrite(f'{self.scanDir}//batch{b}//pos={dsPosString}.tiff',imAvg) # save the updated image
         
         # ~ now = datetime.datetime.now()
@@ -1739,7 +1772,7 @@ class ScanApp():
         now = datetime.datetime.now()
         self.runLog += f'movingAverageBatch thread completed for b = {b} at {now.strftime("%Y_%m_%d-%H_%M_%S")} \n'
     
-    def endScan(self, weight):        
+    def endScan(self, weight, s, b, finalImage):        
         # Make sure all extra threads are closed out
         while len(threading.enumerate()) > 2:
             time.sleep(self.wait)
@@ -1749,13 +1782,12 @@ class ScanApp():
         #  Ending acquisition appropriately helps ensure that devices clean up
         #  properly and do not need to be power-cycled to maintain integrity.
         self.camera.setExposure(1) # Reset exposure to 1.0 s and disconnect from the camera.
-        self.camera.cam.EndAcquisition()
         self.camera.disconnect() # disconnect from camera
         self.root.quit() # Close the prep GUI window when the scan is started
         
         # Do the final batch average, weight is zero for hard stops
         if weight > 0:
-            self.movingAverageBatch(self.b, weight = weight)
+            self.movingAverageBatch(b, weight = weight)
         
         # Save some things
         np.savetxt(self.scanDir + '//' + 'roiScanData.csv',self.roiScanData,delimiter=',')
@@ -1785,7 +1817,7 @@ class ScanApp():
         mean_y00 = np.mean(y00_sorted)
         std_y00 = np.std(y00_sorted)
         
-        fig.suptitle(f't0={self.t0startString}')
+        fig.suptitle(f't0={self.t_startString}')
         
         axs[0,0].plot(t00_sorted,y00_sorted)
         axs[0,0].set_xlabel('Lab Time (s)')
@@ -1796,7 +1828,7 @@ class ScanApp():
         deltaT = deltaT[1:]
         T = np.mean(deltaT)
         deltaS = np.max(self.timeHistory)-np.min(self.timeHistory)
-        S = deltaS/(self.s+1)
+        S = deltaS/(s+1)
         N = len(y00_sorted)
         yf = fft.fft(y00_sorted)
         xf = fft.fftfreq(N, T)[:N//2]
@@ -1826,7 +1858,7 @@ class ScanApp():
                    marker='o',color='green',elinewidth=1,capsize=5,linestyle='') # scan intensity plot with error bars at 1 sigma
         axs[1,1].set_xlabel('t-t0 (ps)')
         
-        axs[1,2].imshow(self.camImage)
+        axs[1,2].imshow(finalImage)
         for r in self.rm:
             tl_x = r.cx - r.w/2
             tl_y = r.cy - r.h/2
@@ -1854,34 +1886,15 @@ class ScanApp():
             axs[1].plot(t00_sorted,self.tcorr_log[1:,1])
             axs[1].set_ylabel('Y shift)')
             axs[1].set_xlabel('Lab Time (s)')
-            fig.suptitle(f't0={self.t0startString}')
+            fig.suptitle(f't0={self.t_startString}')
             
             plt.tight_layout()
             fig.savefig(self.scanDir + '//' + 'translationCorrectionFigure.pdf')
         
         # Close the scan GUI window
         self.root.quit()
-    
-        
-app = SetupApp()
 
-# ~ camera = Camera()
-# ~ t0 = time.time()
-# ~ for i in range(20):
-    # ~ camera.grabImageByTrigger()
-    # ~ print(i,time.time()-t0)
 
-# ~ ds = DelayStage()
-# ~ dsPositions = np.array(range(10))
+if __name__ == '__main__':
+    app = SetupApp()
 
-# ~ app = ScanApp(cam=cam,ds=ds,dsPositions=dsPositions,batchSize=5, translationCorrectionQ=True,smartScanQ=True,scanDir=r'C:\Users\thoma\OneDrive - UCLA IT Services\Documents\GitHub\smartScan\overnightScan_test',tzpos=4)
-
-# ~ # Setup the tkinter GUI window
-# ~ root = tk.Tk()
-# ~ root.geometry("1400x1000")
-
-# ~ dsPosition_label_string = tk.StringVar()
-# ~ dsPosition_label_string.set("dsPos = ")
-# ~ dsPosition_label = tk.Label(master=root,textvariable=dsPosition_label_string)
-# ~ dsPosition_label.pack()
-# ~ root.mainloop()
