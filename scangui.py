@@ -98,7 +98,6 @@ def popupmsg(msg):
     B1 = ttk.Button(popup, text="Okay", command = popup.destroy)
     B1.pack()
     # ~ popup.mainloop()
-
 def update_errorbar(errobj, x, y, xerr=None, yerr=None):
     ln, caps, bars = errobj
 
@@ -154,6 +153,16 @@ def update_errorbar(errobj, x, y, xerr=None, yerr=None):
         barsy.set_segments([np.array([[x, yt], [x, yb]]) for x, yt, yb in zip(x, y + yerr, y - yerr)])
     except NameError:
         pass
+
+def updateTxtFileLine(fileDir, lineNumber, newLineStr):
+    with open(fileDir, 'r') as f:
+        metaData = f.readlines()
+
+    metaData[lineNumber] = newLineStr
+
+    with open(fileDir, 'w') as f:
+        f.writelines(metaData)
+                    
 
 class DelayStage():    
     def __init__(self):
@@ -482,7 +491,7 @@ class pseudoCamera():
             time.sleep(self.pseudoWait)
         self.triggered = False
         self.counter += 1
-        return  np.array((self.counter%11)*10000*np.random.random([500,500]), dtype = 'uint16')
+        return  np.array((self.counter%11)*1000*np.random.random([500,500]), dtype = 'uint16')
     def getExposure(self):
         return self.pseudoExposure
     def getGain(self):
@@ -1582,17 +1591,21 @@ class ScanApp():
             b += 1 # Record that a new batch is being taken, note that b is initiated at a value of -1
             self.batchNumber_label_string.set(f"batch # = {b}") # Write the current batch number to the gui
             
-            os.makedirs(f'{self.scanDir}//batch{b}') # Create a directory for the new batch files
-        
+            # Create a directory for the new batch files
+            os.makedirs(f'{self.scanDir}//batch{b}')
+            
+            # Create a batch meta data file, write the current time in it along with a row for each delay stage position
+            with open(f'{self.scanDir}//batch{b}//batchMetaData.txt', 'w') as f:
+                f.write(f'batch {b} started at {datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")} \n')
+                for p in range(len(self.dsPositions)):
+                    f.write(f'dsPos = {self.dsPositions[p]} mm, weight = 0 \n')
+
             # Create the files of a new batch
             for p in range(len(self.dsPositions)):
                 dsPos = self.dsPositions[p] # direction doesn't matter here; we just need the positions for the files names
                 dsPosString = '%.4f' % dsPos
                 tifffile.imwrite(f'{self.scanDir}//batch{b}//pos={dsPosString}.tiff',self.zeroImage)
-            
-            # Log batch start time
-            self.runLog += f'batch {b} started at {datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")} \n'
-            
+        
             ### Start the new batch ###
             for bi in range(self.batchSize):
                 s += 1 # Record that a new scan is being taken, note that s is inititated at a value of -1
@@ -1693,8 +1706,12 @@ class ScanApp():
         self.endScan()
     
     def processImage(self, image, pi, s, b, t_image):
+        bi_calc = s%self.batchSize
         self.runLog += f'\t \t processImage thread image acquired for pi = {pi}, s = {s} | (t-t_start) =  {round(t_image-self.t_start,2)} \n'
-        
+        # Record image process info in the batch meta data file
+        updateTxtFileLine(fileDir=f'{self.scanDir}//batch{b}//batchMetaData.txt', lineNumber = 1 + pi, \
+                            newLineStr = f'dsPos = {self.dsPositions[pi]} mm, weight = {bi_calc + 1} \n')
+                    
         # Update the ROI data plots
         if len(self.rm) > 0:
             if self.translationCorrectionQ:
@@ -1750,7 +1767,6 @@ class ScanApp():
         # Load the image corresponding to this position from the current batch, update the moving average, save
         dsPosString = '%.4f' % self.dsPositions[pi]
         imAvg = tifffile.imread(f'{self.scanDir}//batch{b}//pos={dsPosString}.tiff')
-        bi_calc = s%self.batchSize
         imAvg = np.array((image + bi_calc*imAvg)/(bi_calc+1),dtype=self.image_dtype) # moving average
         tifffile.imwrite(f'{self.scanDir}//batch{b}//pos={dsPosString}.tiff',imAvg) # save the updated image
         
