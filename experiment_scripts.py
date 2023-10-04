@@ -6,7 +6,7 @@ import datetime
 import os
 import tifffile
 
-def fluenceScan(dsPosList, hwpPosList, exposure, gain, scanDir, dsWait = 0.5, hwpWait = 60, loopsPerHwpPos = 10):
+def fluenceScan(dsPosList, hwpPosList, exposure, gain, scanDir, dsWait = 0.5, hwpWait = 10, loopsPerHwpPos = 4):
     scanLive = True
     # Initialize camera
     camera = lab_instruments.Camera()
@@ -52,6 +52,12 @@ def fluenceScan(dsPosList, hwpPosList, exposure, gain, scanDir, dsWait = 0.5, hw
 
     #pi will be position index, fi will be fluence index, li will be loop index (loops at the same fluence)
     L = -1 # This counts which loop we are on
+    
+    # Wait here for user to begin scan
+    beginCode = input('Press enter to start fluence scan ')
+    if beginCode != '':
+        scanLive = False
+    
     while scanLive:
         # Increment the loop number, create a directory to store the images of this loop, populate with empty images
         L += 1
@@ -93,10 +99,16 @@ def fluenceScan(dsPosList, hwpPosList, exposure, gain, scanDir, dsWait = 0.5, hw
                     imAvg = tifffile.imread(f'{scanDir}//loop{L}//fi={fi}_pi={pi}.tiff')
                     imAvg = np.array((newImage + li*imAvg)/(li+1),dtype=image_dtype) # moving average
                     tifffile.imwrite(f'{scanDir}//loop{L}//fi={fi}_pi={pi}.tiff',imAvg) # save the updated image
-  
+    
+    
+    # Disconnect from devices    
+    ds.disconnect() # disconnect from delay stage
+    #  Ending acquisition appropriately helps ensure that devices clean up
+    #  properly and do not need to be power-cycled to maintain integrity.
+    camera.setExposure(1) # Reset exposure to 1.0 s and disconnect from the camera.
+    camera.disconnect() # disconnect from camera
+    # disconnect from hwp
+    hwp.disconnect()
 
 
-
-
-
-fluenceScan([1,2,3],[4,5,6],1,30,r'C:\Users\thoma\OneDrive\Documents\GitHub\smartScan\New folder')
+fluenceScan([61,62,63],[71,72,73],1,30,r'C:\Users\Kogar\Documents\GitHub\smartScan\testDir')

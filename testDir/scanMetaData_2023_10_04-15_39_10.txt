@@ -1,0 +1,8 @@
+scanStartTime:2023_10_04-15_39_10
+gain:30
+exposure:1
+dsPositions:[61, 62, 63]
+hwpPositions:[71, 72, 73]
+loopsPerHwpPos:4
+hwpWait (s):10
+directory:C:\Users\Kogar\Documents\GitHub\smartScan\testDir

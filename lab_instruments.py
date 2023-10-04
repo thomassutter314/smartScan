@@ -1,7 +1,8 @@
 import time
 import numpy as np
+import pyvisa
 
-TESTING = True
+TESTING = False
 
 if TESTING == False:
     import PySpin
@@ -222,7 +223,7 @@ class Camera():
         return result
         
     def disconnect(self):
-        self.camera.cam.EndAcquisition()
+        self.cam.EndAcquisition()
         del self.cam
         self.cam_list.Clear()
         self.system.ReleaseInstance()
@@ -314,19 +315,36 @@ class HalfWavePlate():
         print('Device status: ' + str(self.rotationMount.query('0gs')))
         print('Device settings: ' + str(self.rotationMount.query('0i1')))
         self.pos = self.rotationMount.query('0gp')
-        print('raw output = ' + str(self.pos),' ,pos = ' + str(self.conv*twos_complement(self.pos[3:],32)) + ' deg')
+        print('raw output = ' + str(self.pos),' ,pos = ' + str(self.conv*self.twos_complement(self.pos[3:],32)) + ' deg')
+        
+    def twos_complement(self, hexstr, bits):
+        value = int(hexstr,16)
+        if value & (1 << (bits-1)):
+            value -= 1 << bits
+        return value
+
+    def hexStringFromDec(self, dec, byteNumber = 32):
+        hexString = format(dec,'0X')
+        #print(len(hexString))
+        if 4*len(hexString) < byteNumber:
+            hexString = int(byteNumber/4 - len(hexString))*'0' + hexString
+        #print(hexString)
+        return hexString
+        
     def disconnect(self):
         # Close the instrument
         self.rotationMount.close()
         print('Instrument Closed')
+        
     def getPos(self):
         self.pos = self.rotationMount.query('0gp')
         #print('raw output = ' + str(self.pos),' ,pos = ' + str(self.conv*twos_complement(self.pos[3:],32)) + ' deg')
-        return self.conv*twos_complement(self.pos[3:],32)
+        return self.conv*self.twos_complement(self.pos[3:],32)
+        
     def moveAbsolute(self, newPos):
         # The user should enter newPos in degrees; it will be converted to the machine scale.
         machineScalePos = int(newPos/self.conv)
-        commandString = "0ma" + hexStringFromDec(machineScalePos)
+        commandString = "0ma" + self.hexStringFromDec(machineScalePos)
         #print('commandString',commandString)
         self.rotationMount.write(commandString)
 
