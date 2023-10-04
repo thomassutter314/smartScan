@@ -1,0 +1,34 @@
+scan app started at 2023_10_03-23_59_56 
+dataAcquisitionLoop started at 2023_10_03-23_59_58 
+	 scan 0 (bi = 0) started at 2023_10_03-23_59_58 
+	 	 processImage thread image acquired for pi = 0, s = 0 | (t-t_start) =  1.13 
+	 	 processImage thread image acquired for pi = 1, s = 0 | (t-t_start) =  2.24 
+	 	 processImage thread image acquired for pi = 2, s = 0 | (t-t_start) =  3.35 
+	 	 processImage thread image acquired for pi = 3, s = 0 | (t-t_start) =  4.49 
+	 	 processImage thread image acquired for pi = 4, s = 0 | (t-t_start) =  5.6 
+	 	 processImage thread image acquired for pi = 5, s = 0 | (t-t_start) =  6.73 
+	 	 processImage thread image acquired for pi = 6, s = 0 | (t-t_start) =  7.84 
+	 	 processImage thread image acquired for pi = 7, s = 0 | (t-t_start) =  8.95 
+	 	 processImage thread image acquired for pi = 8, s = 0 | (t-t_start) =  10.09 
+	 	 processImage thread image acquired for pi = 9, s = 0 | (t-t_start) =  11.23 
+	 	 processImage thread image acquired for pi = 10, s = 0 | (t-t_start) =  12.34 
+	 scan 1 (bi = 0) started at 2023_10_04-00_00_10 
+movingAverageBatch thread completed for b = 0 at 2023_10_04-00_00_10 
+	 	 processImage thread image acquired for pi = 0, s = 1 | (t-t_start) =  13.53 
+	 	 processImage thread image acquired for pi = 1, s = 1 | (t-t_start) =  14.65 
+	 	 processImage thread image acquired for pi = 2, s = 1 | (t-t_start) =  17.8 
+	 	 processImage thread image acquired for pi = 3, s = 1 | (t-t_start) =  18.93 
+	 	 processImage thread image acquired for pi = 4, s = 1 | (t-t_start) =  20.07 
+	 	 processImage thread image acquired for pi = 5, s = 1 | (t-t_start) =  21.21 
+	 	 processImage thread image acquired for pi = 6, s = 1 | (t-t_start) =  22.35 
+	 	 processImage thread image acquired for pi = 7, s = 1 | (t-t_start) =  23.49 
+	 	 processImage thread image acquired for pi = 8, s = 1 | (t-t_start) =  24.6 
+	 	 processImage thread image acquired for pi = 9, s = 1 | (t-t_start) =  25.71 
+	 	 processImage thread image acquired for pi = 10, s = 1 | (t-t_start) =  26.81 
+	 scan 2 (bi = 0) started at 2023_10_04-00_00_25 
+movingAverageBatch thread completed for b = 1 at 2023_10_04-00_00_25 
+	 	 processImage thread image acquired for pi = 0, s = 2 | (t-t_start) =  28.01 
+	 	 processImage thread image acquired for pi = 1, s = 2 | (t-t_start) =  29.11 
+	 	 processImage thread image acquired for pi = 2, s = 2 | (t-t_start) =  30.22 
+	 	 processImage thread image acquired for pi = 3, s = 2 | (t-t_start) =  31.33 
+movingAverageBatch thread completed for b = 2 at 2023_10_04-00_00_29 

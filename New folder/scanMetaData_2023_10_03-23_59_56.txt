@@ -1,0 +1,8 @@
+scanStartTime:2023_10_03-23_59_56
+gain:30
+exposure:1
+dsPositions:(10,20,1)
+batchSize:1
+translationCorrection:0
+smartScan:0
+directory:C:\Users\thoma\OneDrive - UCLA IT Services\Documents\GitHub\smartScan\New folder

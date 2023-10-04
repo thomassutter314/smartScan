@@ -51,7 +51,6 @@ from matplotlib.backends.backend_tkagg import (
 # Use a matplotlib backend that doesn't have an associated gui
 plt.switch_backend('agg')
 
-
 import numpy as np
 import scipy
 from scipy import fft
@@ -1307,7 +1306,7 @@ class SetupApp():
                 for r in self.rm:
                     # Only count an ROI if it is active
                     if r.live:
-                        roiImage = self.camImage[int(r.cy-r.h/2):int(r.cy+r.h/2),int(r.cx-r.w/2):int(r.cx+r.w/2)] # The roi sum is taken from single images even when averaging is on
+                        roiImage = np.array(self.camImage[int(r.cy-r.h/2):int(r.cy+r.h/2),int(r.cx-r.w/2):int(r.cx+r.w/2)], dtype = 'float64') # The roi sum is taken from single images even when averaging is on
                         roiPixelSum += np.sum(roiImage)
                         roiTotalArea += roiImage.shape[0]*roiImage.shape[1]
                         
@@ -1826,7 +1825,7 @@ class ScanApp():
             roiPixelSum = 0
             for r in self.rm:
                 # Get pixel data in the roi
-                roiImage = image[int(r.cy-r.h/2):int(r.cy+r.h/2),int(r.cx-r.w/2):int(r.cx+r.w/2)]                                
+                roiImage = np.array(image[int(r.cy-r.h/2):int(r.cy+r.h/2),int(r.cx-r.w/2):int(r.cx+r.w/2)],dtype='float64')                              
                 # get the sum inside all the rois and the roi total area, we will average with a normalization to area
                 roiPixelSum += np.sum(roiImage)
                 
@@ -2105,7 +2104,7 @@ if __name__ == '__main__':
     # ~ incrementBatchMetaDataWeight(r"C:\Users\thoma\OneDrive\Documents\GitHub\smartScan\test\batch0\batchMetaData.txt", 1)
     # ~ a, b= readBatchMetaDataWeight(r"C:\Users\thoma\OneDrive\Documents\GitHub\smartScan\test\batch1\batchMetaData.txt", 4)
     # ~ print(a, b)
-    # ~ app = SetupApp()
-    dsPositions = [1,2,3]
-    hwpPositions = [10, 20, 30]
-    fluenceScan([1,2,3],[10,20,30],1,30,r'C:\Users\thoma\OneDrive\Documents\GitHub\smartScan\test', dsWait = 0.1, hwpWait = 1, loopsPerHwpPos = 4)
+    app = SetupApp()
+    # ~ dsPositions = [1,2,3]
+    # ~ hwpPositions = [10, 20, 30]
+    # ~ fluenceScan([1,2,3],[10,20,30],1,30,r'C:\Users\thoma\OneDrive\Documents\GitHub\smartScan\test', dsWait = 0.1, hwpWait = 1, loopsPerHwpPos = 4)

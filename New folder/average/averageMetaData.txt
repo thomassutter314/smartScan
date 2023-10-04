@@ -1,0 +1,11 @@
+pi = 0, dsPos = 10.0 mm, weight = 3
+pi = 1, dsPos = 11.0 mm, weight = 3
+pi = 2, dsPos = 12.0 mm, weight = 3
+pi = 3, dsPos = 13.0 mm, weight = 3
+pi = 4, dsPos = 14.0 mm, weight = 2
+pi = 5, dsPos = 15.0 mm, weight = 2
+pi = 6, dsPos = 16.0 mm, weight = 2
+pi = 7, dsPos = 17.0 mm, weight = 2
+pi = 8, dsPos = 18.0 mm, weight = 2
+pi = 9, dsPos = 19.0 mm, weight = 2
+pi = 10, dsPos = 20.0 mm, weight = 2
