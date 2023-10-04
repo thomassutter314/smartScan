@@ -1,0 +1,8 @@
+scanStartTime:2023_10_03-19_31_05
+gain:30
+exposure:1
+dsPositions:[1, 2, 3]
+hwpPositions:[10, 20, 30]
+loopsPerHwpPos:10
+hwpWait (s):60
+directory:C:\Users\thoma\OneDrive\Documents\GitHub\smartScan\test

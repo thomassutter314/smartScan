@@ -154,16 +154,47 @@ def update_errorbar(errobj, x, y, xerr=None, yerr=None):
     except NameError:
         pass
 
-def updateTxtFileLine(fileDir, lineNumber, newLineStr):
+def incrementBatchMetaDataWeight(fileDir, pi, increment = 1):
+    # function runs on the average metadata too
+    with open(fileDir, 'r') as f:
+        metaData = f.readlines()
+    
+    idString_start = f'pi = '
+    idString_finish = f', dsPos'
+    weightString = f'weight = '
+    for l in range(len(metaData)):
+        if idString_start in metaData[l]:
+            index_start = metaData[l].find(idString_start) + len(idString_start)
+            index_finish = metaData[l].find(idString_finish)
+            if pi == int(metaData[l][index_start:index_finish]):
+                indexWeight = metaData[l].find(weightString) + len(weightString)
+                oldWeight = int(metaData[l][indexWeight:])
+                newLine = metaData[l][:indexWeight] + str(oldWeight + increment) + '\n'
+                metaData[l] = newLine # Update the list storing the lines
+                break # exit the for loop after the correct position index has been found
+                
+    # Write the lines back to the text file
+    with open(fileDir, 'w') as f:
+        f.writelines(metaData)
+
+def readBatchMetaDataWeight(fileDir, pi):
+    # function runs on the average metadata too
     with open(fileDir, 'r') as f:
         metaData = f.readlines()
 
-    metaData[lineNumber] = newLineStr
+    idString_start = f'pi = '
+    idString_finish = f', dsPos'
+    weightString = f'weight = '
+    for l in range(len(metaData)):
+        if idString_start in metaData[l]:
+            index_start = metaData[l].find(idString_start) + len(idString_start)
+            index_finish = metaData[l].find(idString_finish)
+            if pi == int(metaData[l][index_start:index_finish]):
+                indexWeight = metaData[l].find(weightString) + len(weightString)
+                weight = int(metaData[l][indexWeight:])
+                return weight
 
-    with open(fileDir, 'w') as f:
-        f.writelines(metaData)
-                    
-
+                        
 class DelayStage():    
     def __init__(self):
         #import System
@@ -491,7 +522,10 @@ class pseudoCamera():
             time.sleep(self.pseudoWait)
         self.triggered = False
         self.counter += 1
-        return  np.array((self.counter%11)*1000*np.random.random([500,500]), dtype = 'uint16')
+        # ~ return  np.array((self.counter%11)*1000*np.random.random([500,500]), dtype = 'uint16')
+        # ~ return  np.array(9000*np.random.random([500,500]), dtype = 'uint16')
+        # ~ return np.array(5000*(np.zeros([500,500]) + 1), dtype = 'uint16')
+        return np.array(np.random.normal(loc = 50000,scale = 1000,size = (500,500)), dtype = 'uint16')
     def getExposure(self):
         return self.pseudoExposure
     def getGain(self):
@@ -501,10 +535,18 @@ class pseudoCamera():
     def setGain(self,setValue):
         self.pseudoGain = setValue
 
+class pseudoHalfWavePlate():
+    def __init__(self):
+        print('This is a pseudo half wave plate for testing')
+    def setPos(self, val):
+        print(f'Setting HWP Pos to {val} (pseudo hwp)')
+    
+
 if TESTING == True:
     # In test mode we redefine these classes as test objects that don't connect to anything
     Camera = pseudoCamera
     DelayStage = pseudoDelayStage
+    HalfWavePlate = pseudoHalfWavePlate
     
 class RoiRectangle():
     def __init__(self,cx,cy,w,h,ax):
@@ -1187,9 +1229,15 @@ class SetupApp():
                 # Turn off the update in progress variable
                 self.camSettingsUpdateInProgress = False
             
-            # Thread triggers the camera and then waits for the image to come in while updating the progress bar plot.
+            # Check at this point for early exit to loop
+            if self.camLive != 1:
+                break
+            
+            # Async Thread triggers the camera and then waits for the image to come in while updating the progress bar plot.
             thrImage = threading.Thread(target=self.imageAcquire)
             thrImage.start()
+            
+            # Processing on the previous image
             
             # Check whether we are saving image sets, saves the raw image (camImage)
             if self.saveImageSet and self.avgDirLocEntry.get() != '':
@@ -1396,6 +1444,10 @@ class ScanApp():
         self.roiScanData = np.zeros([1,len(self.dsPositions)]) # full record of intensity in the roi
         self.timeHistory = np.zeros([1,len(self.dsPositions)]) # coincident record of when data was taken
         
+        self.batchSize_label_string = tk.StringVar()
+        self.batchSize_label_string.set(f'Batch Size = {self.batchSize}')
+        self.batchSize_label = tk.Label(master=self.controls,textvariable=self.batchSize_label_string,bg=cntrlBg)
+        
         self.scanNumber_label_string = tk.StringVar()
         self.scanNumber_label_string.set(f"scan # = ...")
         self.scanNumber_label = tk.Label(master=self.controls,textvariable=self.scanNumber_label_string,bg=cntrlBg)
@@ -1469,6 +1521,7 @@ class ScanApp():
         self.errorLog_label = tk.Label(master=self.controls,textvariable=self.errorLog_label_string,bg=cntrlBg)
         
         # Pack everything on controls frame
+        self.batchSize_label.pack(pady=padySep)
         self.scanNumber_label.pack(pady=padySep)
         self.batchNumber_label.pack(pady=padySep)
         self.dsPosition_label.pack(pady=padySep)
@@ -1586,6 +1639,11 @@ class ScanApp():
         self.t_start = time.time()
         t_lastImage = self.t_start # This variable will later be used to record when images finish
         
+        # Create a meta data file for the total average folder, write a row for each delay stage position
+        with open(f'{self.scanDir}//average//averageMetaData.txt', 'w') as f:
+            for p in range(len(self.dsPositions)):
+                f.write(f'pi = {p}, dsPos = {self.dsPositions[p]} mm, weight = 0 \n')
+        
         ### Start the experiment loop ###
         while self.scanLive:
             b += 1 # Record that a new batch is being taken, note that b is initiated at a value of -1
@@ -1594,11 +1652,13 @@ class ScanApp():
             # Create a directory for the new batch files
             os.makedirs(f'{self.scanDir}//batch{b}')
             
-            # Create a batch meta data file, write the current time in it along with a row for each delay stage position
+            # Create a batch meta data file, write a row for each delay stage position
             with open(f'{self.scanDir}//batch{b}//batchMetaData.txt', 'w') as f:
+                f.write(f'Experiment start time  = {self.t_startString}\n')
                 f.write(f'batch {b} started at {datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")} \n')
+                f.write(f'batchSize = {self.batchSize}\n')
                 for p in range(len(self.dsPositions)):
-                    f.write(f'dsPos = {self.dsPositions[p]} mm, weight = 0 \n')
+                    f.write(f'pi = {p}, dsPos = {self.dsPositions[p]} mm, weight = 0 \n')
 
             # Create the files of a new batch
             for p in range(len(self.dsPositions)):
@@ -1609,7 +1669,6 @@ class ScanApp():
             ### Start the new batch ###
             for bi in range(self.batchSize):
                 s += 1 # Record that a new scan is being taken, note that s is inititated at a value of -1
-                print(f's%self.batchSize = {s%self.batchSize}, bi = {bi}')
                 self.scanNumber_label_string.set(f"scan # = {s}") # Write the current scan number to the gui
                 
                 # Log scan start time
@@ -1644,8 +1703,6 @@ class ScanApp():
                     # Process previous image (that is the one taken before the currently running trigger), skip initial
                     if p > 0:
                         self.processImage(imageData, pi_prev, s, b, t_lastImage)
-            
-                    # ~ self.runLog += f'\t \t dsPos = {dsPos} mm, pi = {self.pi}, deltaT = {deltaTString}, ET = {deltaETString} \n'
                     
                     # Get the new image from the camera and record the parameters at the time of this image
                     imageData, pi_prev = self.camera.grabImage(), pi
@@ -1658,22 +1715,40 @@ class ScanApp():
                     
                     # Before moving to next loop check hard stop and pause
                     if self.hardStop:
-                        return self.endScan(0,s,b,imageData) #exits the dataAcquisitionLoop
+                        # Process the last image of the scan before hard stop
+                        self.processImage(imageData, pi_prev, s, b, t_lastImage) 
+                        
+                        # Make sure all extra threads are closed out
+                        while len(threading.enumerate()) > 2:
+                            time.sleep(self.wait)
+                            
+                        # Do the final batch average
+                        self.movingAverageBatch(b)
+                        
+                        #exits the dataAcquisitionLoop
+                        return self.endScan(finalImage = imageData, finalScanNumber = s)
                     
                     while self.paused:
                         time.sleep(self.wait) # block here if paused
 
                 # This point in the loop occurs when a scan has concluded
-                # Process the last image of the scan
-                self.processImage(imageData, pi_prev, s, b, t_lastImage)
+                self.processImage(imageData, pi_prev, s, b, t_lastImage) # Process the last image of the scan
+                
+                # Before moving on to a new scan, check whether a gentle stop call is active
+                if self.gentleStop:
+                    # Make sure all extra threads are closed out
+                    while len(threading.enumerate()) > 2:
+                        time.sleep(self.wait)
+                        
+                    # Do the final batch average
+                    self.movingAverageBatch(b)
+                    
+                    #exits the dataAcquisitionLoop
+                    return self.endScan(finalImage = imageData, finalScanNumber = s)
                     
                 # Update the lab time intensity monitor
                 self.intensityLabTime.append(0)
                 self.intensityLabTime[s] = np.mean(self.roiScanData[s,:]) # Update the lab time plot since the scan has ended
-                
-                # Before moving on to a new scan, check whether a gentle stop call is active
-                if self.gentleStop:
-                    return self.endScan((bi+1)/self.batchSize, s, b, imageData) #exits the dataAcquisitionLoop
             
             # This point in the loop occurs when a batch has concluded
             # Make sure the previous batch moving average thread has concluded
@@ -1684,12 +1759,6 @@ class ScanApp():
             # Start the batch moving average thread
             thrBatchAverage = threading.Thread(target=self.movingAverageBatch, args=(b,), kwargs={})
             thrBatchAverage.start()
-            
-            now = datetime.datetime.now()
-            self.runLog += f'batch {b} concluded at {now.strftime("%Y_%m_%d-%H_%M_%S")} \n'
-            self.runLog += f'Active Threads: {threading.enumerate()} \n'
-            
-            # Save some things
             
             # We do a temporary save of the roiScanData and timeHistory
             np.savetxt(self.scanDir + '//' + 'roiScanData.csv',self.roiScanData,delimiter=',')
@@ -1706,12 +1775,12 @@ class ScanApp():
         self.endScan()
     
     def processImage(self, image, pi, s, b, t_image):
+        print(pi)
         bi_calc = s%self.batchSize
         self.runLog += f'\t \t processImage thread image acquired for pi = {pi}, s = {s} | (t-t_start) =  {round(t_image-self.t_start,2)} \n'
-        # Record image process info in the batch meta data file
-        updateTxtFileLine(fileDir=f'{self.scanDir}//batch{b}//batchMetaData.txt', lineNumber = 1 + pi, \
-                            newLineStr = f'dsPos = {self.dsPositions[pi]} mm, weight = {bi_calc + 1} \n')
-                    
+        # Record image process info in the batch meta data file                            
+        incrementBatchMetaDataWeight(fileDir=f'{self.scanDir}//batch{b}//batchMetaData.txt', pi = pi)        
+        
         # Update the ROI data plots
         if len(self.rm) > 0:
             if self.translationCorrectionQ:
@@ -1769,48 +1838,52 @@ class ScanApp():
         imAvg = tifffile.imread(f'{self.scanDir}//batch{b}//pos={dsPosString}.tiff')
         imAvg = np.array((image + bi_calc*imAvg)/(bi_calc+1),dtype=self.image_dtype) # moving average
         tifffile.imwrite(f'{self.scanDir}//batch{b}//pos={dsPosString}.tiff',imAvg) # save the updated image
-        
-        # ~ now = datetime.datetime.now()
-        # ~ self.runLog += f'\t \t processImage thread completed for pi = {pi}, s = {s} | duration =  {round(time.time()-t0,2)} \n'
     
-    def movingAverageBatch(self, b, weight = 1):
-        # Weight should always be 1 except for on the last call to this function where the batch is most likely not complete
+    def movingAverageBatch(self, b):
         print(f'Computing moving average on batch {b}')
         for p in range(len(self.dsPositions)):
             print(f'moving batch average on position index {p}')
             dsPos = self.dsPositions[p]
             dsPosString = '%.4f' % dsPos
+            
+            # Load the image from the b batch folder
             imNew = tifffile.imread(f'{self.scanDir}//batch{b}//pos={dsPosString}.tiff') # Load the image corresponding to this position and the latest batch
+            # Load the image from the average folder
             imAvg = tifffile.imread(f'{self.scanDir}//average//pos={dsPosString}.tiff') # Load the moving average image corresponding to this position
-            imAvg = np.array((weight*imNew + b*imAvg)/(b+weight),dtype=self.image_dtype) # compute moving average
-            tifffile.imwrite(f'{self.scanDir}//average//pos={dsPosString}.tiff',imAvg) # save the updated image
+            # Get the weight of the new image
+            wNew = readBatchMetaDataWeight(fileDir=f'{self.scanDir}//batch{b}//batchMetaData.txt', pi = p)
+            # get the weight of the average image
+            wAvg = readBatchMetaDataWeight(fileDir=f'{self.scanDir}//average//averageMetaData.txt', pi = p)
+            
+            print('wNew, wAvg',wNew, wAvg) #SCAF
+            # Compute the new average image
+            imFinal = np.array((wNew*imNew + wAvg*imAvg)/(wNew + wAvg), dtype=self.image_dtype) # compute moving average
+            
+            # Upate the average image weight in the average metadata file
+            incrementBatchMetaDataWeight(fileDir=f'{self.scanDir}//average//averageMetaData.txt', pi = p, increment = wNew)
+            
+            # Save the updated image
+            tifffile.imwrite(f'{self.scanDir}//average//pos={dsPosString}.tiff', imFinal)
             
         now = datetime.datetime.now()
         self.runLog += f'movingAverageBatch thread completed for b = {b} at {now.strftime("%Y_%m_%d-%H_%M_%S")} \n'
     
-    def endScan(self, weight, s, b, finalImage):        
-        # Make sure all extra threads are closed out
-        while len(threading.enumerate()) > 2:
-            time.sleep(self.wait)
-        
+    def endScan(self, finalImage, finalScanNumber, makeDataPlots = True):
         # Disconnect from devices    
         self.ds.disconnect() # disconnect from delay stage
         #  Ending acquisition appropriately helps ensure that devices clean up
         #  properly and do not need to be power-cycled to maintain integrity.
         self.camera.setExposure(1) # Reset exposure to 1.0 s and disconnect from the camera.
         self.camera.disconnect() # disconnect from camera
-        self.root.quit() # Close the prep GUI window when the scan is started
-        
-        # Do the final batch average, weight is zero for hard stops
-        if weight > 0:
-            self.movingAverageBatch(b, weight = weight)
-        
+        self.root.quit() # Close the gui window
+                
         # Save some things
         np.savetxt(self.scanDir + '//' + 'roiScanData.csv',self.roiScanData,delimiter=',')
         np.savetxt(self.scanDir + '//' + 'timeHistory.csv',self.timeHistory,delimiter=',')
         
-        # save the corrections log
-        np.savetxt(self.scanDir + '//' + f'tcorrLog_batch.csv',self.tcorr_log,delimiter=',')
+        if self.translationCorrectionQ:
+            # save the corrections log
+            np.savetxt(self.scanDir + '//' + f'tcorrLog_batch.csv',self.tcorr_log,delimiter=',')
         
         # SCAF, save the run log to a txt file
         with open(self.scanDir + '//' + self.runLogFileName, "w") as text_file:
@@ -1819,98 +1892,181 @@ class ScanApp():
         # Disconnect from camera and clean up
         # Disconnect from delay stage and clean up
         
-        # Save data plots
-        fig, axs = plt.subplots(2,3)
-        
-        y00 = self.roiScanData.flatten()
-        t00 = self.timeHistory.flatten()
-        
-        sorted_indices = np.argsort(t00)
-        
-        t00_sorted = t00[sorted_indices]
-        y00_sorted = y00[sorted_indices]
-        
-        mean_y00 = np.mean(y00_sorted)
-        std_y00 = np.std(y00_sorted)
-        
-        fig.suptitle(f't0={self.t_startString}')
-        
-        axs[0,0].plot(t00_sorted,y00_sorted)
-        axs[0,0].set_xlabel('Lab Time (s)')
-        # ~ axs[0,0].legend()
-        # ~ axs[0,0].set_ylim([mean_y00-6*std_y00],mean_y00+6*std_y00)
-        
-        deltaT = t00_sorted-np.roll(t00_sorted,1)
-        deltaT = deltaT[1:]
-        T = np.mean(deltaT)
-        deltaS = np.max(self.timeHistory)-np.min(self.timeHistory)
-        S = deltaS/(s+1)
-        N = len(y00_sorted)
-        yf = fft.fft(y00_sorted)
-        xf = fft.fftfreq(N, T)[:N//2]
-        axs[0,1].plot(xf, 2.0/N * np.abs(yf[0:N//2]),alpha=1,c='blue')
-        
-        print('S',S)
-        axs[0,1].axvline(x=1/S,c='red')
-        axs[0,1].axvline(x=1/(2*S),c='green')
-        
-        axs[0,1].set_xscale('log')
-        axs[0,1].set_yscale('log')
-        
-        axs[0,1].set_xlabel('Freq (Hz)')
-        #axs[0,1].set_ylabel('FFT')
-        #axs[0,1].legend()
-        
-        axs[0,2].plot(range(len(self.intensityLabTime)),self.intensityLabTime,'ro')
-        axs[0,2].set_xlabel('Scan #')
-        
-        axs[1,0].errorbar(self.dsPositions,self.intensityScanTime,self.stdIntensityScanTime,\
-                           marker='o',color='green',elinewidth=1,capsize=5,linestyle='') # scan intensity plot with error bars at 1 sigma
-        axs[1,0].set_xlabel('dsPos (mm)')
-        
-        scanTimes = (self.tzpos-self.dsPositions)*6.671281904
-        
-        axs[1,1].errorbar(scanTimes,self.intensityScanTime,self.stdIntensityScanTime,\
-                   marker='o',color='green',elinewidth=1,capsize=5,linestyle='') # scan intensity plot with error bars at 1 sigma
-        axs[1,1].set_xlabel('t-t0 (ps)')
-        
-        axs[1,2].imshow(finalImage)
-        for r in self.rm:
-            tl_x = r.cx - r.w/2
-            tl_y = r.cy - r.h/2
-            axs[1,2].add_patch(patches.Rectangle((tl_x, tl_y), r.w, r.h, linewidth=1, edgecolor='r', facecolor='none', alpha=0.8))
-        
-        axs[1,2].xaxis.set_tick_params(labelbottom=False)
-        axs[1,2].yaxis.set_tick_params(labelleft=False)
-        axs[1,2].set_xticks([])
-        axs[1,2].set_yticks([])
-        
-        plt.tight_layout()
-        fig.savefig(self.scanDir + '//' + 'roiFigure.pdf')
-        
-        
-        # Save a plot showing the translation corrections
-        fig, axs = plt.subplots(2)
-        if self.hardStop == True:
-            t00_sorted = t00_sorted[0:len(self.tcorr_log[1:,0])]
+        if makeDataPlots:
+            # Save data plots
+            fig, axs = plt.subplots(2,3)
             
-        if self.translationCorrectionQ:
-            print(len(t00_sorted),len(self.tcorr_log[1:,0]))
-            axs[0].plot(t00_sorted,self.tcorr_log[1:,0])
-            axs[0].set_ylabel('X shift)')
-            axs[0].set_xlabel('Lab Time (s)')
-            axs[1].plot(t00_sorted,self.tcorr_log[1:,1])
-            axs[1].set_ylabel('Y shift)')
-            axs[1].set_xlabel('Lab Time (s)')
+            y00 = self.roiScanData.flatten()
+            t00 = self.timeHistory.flatten()
+            
+            sorted_indices = np.argsort(t00)
+            
+            t00_sorted = t00[sorted_indices]
+            y00_sorted = y00[sorted_indices]
+            
+            mean_y00 = np.mean(y00_sorted)
+            std_y00 = np.std(y00_sorted)
+            
             fig.suptitle(f't0={self.t_startString}')
             
+            axs[0,0].plot(t00_sorted,y00_sorted)
+            axs[0,0].set_xlabel('Lab Time (s)')
+            # ~ axs[0,0].legend()
+            # ~ axs[0,0].set_ylim([mean_y00-6*std_y00],mean_y00+6*std_y00)
+            
+            deltaT = t00_sorted-np.roll(t00_sorted,1)
+            deltaT = deltaT[1:]
+            T = np.mean(deltaT)
+            deltaS = np.max(self.timeHistory)-np.min(self.timeHistory)
+            S = deltaS/(finalScanNumber+1)
+            N = len(y00_sorted)
+            yf = fft.fft(y00_sorted)
+            xf = fft.fftfreq(N, T)[:N//2]
+            axs[0,1].plot(xf, 2.0/N * np.abs(yf[0:N//2]),alpha=1,c='blue')
+            
+            axs[0,1].axvline(x=1/S,c='red')
+            axs[0,1].axvline(x=1/(2*S),c='green')
+            
+            axs[0,1].set_xscale('log')
+            axs[0,1].set_yscale('log')
+            
+            axs[0,1].set_xlabel('Freq (Hz)')
+            #axs[0,1].set_ylabel('FFT')
+            #axs[0,1].legend()
+            
+            axs[0,2].plot(range(len(self.intensityLabTime)),self.intensityLabTime,'ro')
+            axs[0,2].set_xlabel('Scan #')
+            
+            axs[1,0].errorbar(self.dsPositions,self.intensityScanTime,self.stdIntensityScanTime,\
+                               marker='o',color='green',elinewidth=1,capsize=5,linestyle='') # scan intensity plot with error bars at 1 sigma
+            axs[1,0].set_xlabel('dsPos (mm)')
+            
+            scanTimes = (self.tzpos-self.dsPositions)*6.671281904
+            
+            axs[1,1].errorbar(scanTimes,self.intensityScanTime,self.stdIntensityScanTime,\
+                       marker='o',color='green',elinewidth=1,capsize=5,linestyle='') # scan intensity plot with error bars at 1 sigma
+            axs[1,1].set_xlabel('t-t0 (ps)')
+            
+            axs[1,2].imshow(finalImage)
+            for r in self.rm:
+                tl_x = r.cx - r.w/2
+                tl_y = r.cy - r.h/2
+                axs[1,2].add_patch(patches.Rectangle((tl_x, tl_y), r.w, r.h, linewidth=1, edgecolor='r', facecolor='none', alpha=0.8))
+            
+            axs[1,2].xaxis.set_tick_params(labelbottom=False)
+            axs[1,2].yaxis.set_tick_params(labelleft=False)
+            axs[1,2].set_xticks([])
+            axs[1,2].set_yticks([])
+            
             plt.tight_layout()
-            fig.savefig(self.scanDir + '//' + 'translationCorrectionFigure.pdf')
+            fig.savefig(self.scanDir + '//' + 'roiFigure.pdf')
+            
+            
+            # Save a plot showing the translation corrections
+            fig, axs = plt.subplots(2)
+            if self.hardStop == True:
+                t00_sorted = t00_sorted[0:len(self.tcorr_log[1:,0])]
+                
+            if self.translationCorrectionQ:
+                print(len(t00_sorted),len(self.tcorr_log[1:,0]))
+                axs[0].plot(t00_sorted,self.tcorr_log[1:,0])
+                axs[0].set_ylabel('X shift)')
+                axs[0].set_xlabel('Lab Time (s)')
+                axs[1].plot(t00_sorted,self.tcorr_log[1:,1])
+                axs[1].set_ylabel('Y shift)')
+                axs[1].set_xlabel('Lab Time (s)')
+                fig.suptitle(f't0={self.t_startString}')
+                
+                plt.tight_layout()
+                fig.savefig(self.scanDir + '//' + 'translationCorrectionFigure.pdf')
         
         # Close the scan GUI window
         self.root.quit()
 
 
-if __name__ == '__main__':
-    app = SetupApp()
+def fluenceScan(dsPosList, hwpPosList, exposure, gain, scanDir, dsWait = 0.5, hwpWait = 60, loopsPerHwpPos = 10):
+    scanLive = True
+    # Initialize camera
+    camera = Camera()
+    time.sleep(1)
+    camera.setExposure(exposure)
+    camera.setGain(gain)
+            
+    # Connect to the delay stage
+    ds = DelayStage()
+    
+    # Connect to the hwp
+    hwp = HalfWavePlate()
+    
+    time.sleep(1)
+    
+    # take a sample image
+    camera.trigger()
+    camImage = camera.grabImage()
+    h, w = camImage.shape
+    image_dtype = np.float32
+    zeroImage = np.zeros(np.shape(camImage),dtype=image_dtype) # A zero image that can be used later
+    
+    print('Starting Fluence Scan')
+    print(f'scanDir = {scanDir}')
+    
+    # Record the metadata of the scan
+    now = datetime.datetime.now()
+    nowString = now.strftime("%Y_%m_%d-%H_%M_%S")
+    scanParamsDict = { \
+                    'scanStartTime':nowString,\
+                    'gain':str(gain),\
+                    'exposure':str(exposure),\
+                    'dsPositions':str(dsPosList),\
+                    'hwpPositions':str(hwpPosList),\
+                    'loopsPerHwpPos':str(loopsPerHwpPos),\
+                    'hwpWait (s)':str(hwpWait),\
+                    'directory':scanDir}
+    with open(f'{scanDir}//scanMetaData_{nowString}.txt','w') as smdf:
+        for key, value in scanParamsDict.items():
+            smdf.write('%s:%s\n' % (key, value))
+            
+    original_umask = os.umask(0)
 
+    #pi will be position index, fi will be fluence index, li will be loop index (loops at the same fluence)
+    L = -1 # This counts which loop we are on
+    while scanLive:
+        # Increment the loop number, create a directory to store the images of this loop, populate with empty images
+        L += 1
+        os.makedirs(f'{scanDir}//loop{L}')
+        # Create the files of this loop
+        for f in range(len(hwpPosList)):
+            for p in range(len(dsPosList)):
+                tifffile.imwrite(f'{scanDir}//loop{L}//fi={f}_pi={p}.tiff',zeroImage)
+        
+        for fi in range(len(hwpPosList)):
+            # move to next hwp pos
+            hwp.setPos(hwpPosList[fi])
+            print(f'fi = {fi}, hwpPos = {hwpPosList[fi]}')
+            print(f'Waiting for {hwpWait} seconds at this hwp position so that temp is steady')
+            time.sleep(hwpWait)
+            for li in range(loopsPerHwpPos):
+                for pi in range(len(dsPosList)):
+                    ds.setPos(dsPosList[pi])
+                    print(f'pi = {pi}, dsPos = {dsPosList[pi]}')
+                    print(f'Waiting for {dsWait} seconds at this ds position')
+                    time.sleep(dsWait)
+                    
+                    # Trigger the camera
+                    camera.trigger()
+                    # code waits here until new image is available
+                    newImage = camera.grabImage()
+                    
+                    # In this loop directory, loads the image associated with this fi and pi
+                    imAvg = tifffile.imread(f'{scanDir}//loop{L}//fi={fi}_pi={pi}.tiff')
+                    imAvg = np.array((newImage + li*imAvg)/(li+1),dtype=image_dtype) # moving average
+                    tifffile.imwrite(f'{self.scanDir}//loop{L}//fi={fi}_pi={pi}.tiff',imAvg) # save the updated image
+                    
+                    
+
+if __name__ == '__main__':
+    # ~ incrementBatchMetaDataWeight(r"C:\Users\thoma\OneDrive\Documents\GitHub\smartScan\test\batch0\batchMetaData.txt", 1)
+    # ~ a, b= readBatchMetaDataWeight(r"C:\Users\thoma\OneDrive\Documents\GitHub\smartScan\test\batch1\batchMetaData.txt", 4)
+    # ~ print(a, b)
+    # ~ app = SetupApp()
+    fluenceScan([1,2,3],[10,20,30],1,30,r'C:\Users\thoma\OneDrive\Documents\GitHub\smartScan\test')
