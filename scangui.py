@@ -483,6 +483,34 @@ class Camera():
         except:
             return False
 
+class HalfWavePlate():
+    def __init__(self):
+        self.conv = 0.00251175 # Conversion factor between device output and degrees
+        self.rm = pyvisa.ResourceManager()
+        self.rm.list_resources()
+        self.rotationMount = self.rm.open_resource('COM10')
+        #COM 10 for pump
+        self.rotationMount.read_termination = '\r\n'
+        self.rotationMount.write_termination = '\r\n'
+        print('Device status: ' + str(self.rotationMount.query('0gs')))
+        print('Device settings: ' + str(self.rotationMount.query('0i1')))
+        self.pos = self.rotationMount.query('0gp')
+        print('raw output = ' + str(self.pos),' ,pos = ' + str(self.conv*twos_complement(self.pos[3:],32)) + ' deg')
+    def disconnect(self):
+        # Close the instrument
+        self.rotationMount.close()
+        print('Instrument Closed')
+    def getPos(self):
+        self.pos = self.rotationMount.query('0gp')
+        #print('raw output = ' + str(self.pos),' ,pos = ' + str(self.conv*twos_complement(self.pos[3:],32)) + ' deg')
+        return self.conv*twos_complement(self.pos[3:],32)
+    def moveAbsolute(self, newPos):
+        # The user should enter newPos in degrees; it will be converted to the machine scale.
+        machineScalePos = int(newPos/self.conv)
+        commandString = "0ma" + hexStringFromDec(machineScalePos)
+        #print('commandString',commandString)
+        self.rotationMount.write(commandString)
+
 class pseudoDelayStage():
     def __init__(self):
         print('This is a pseudo Delay Stage for testing')
@@ -538,10 +566,10 @@ class pseudoCamera():
 class pseudoHalfWavePlate():
     def __init__(self):
         print('This is a pseudo half wave plate for testing')
-    def setPos(self, val):
+    def moveAbsolute(self, val):
         print(f'Setting HWP Pos to {val} (pseudo hwp)')
-    
-
+    def getPos(self):
+        return 0
 if TESTING == True:
     # In test mode we redefine these classes as test objects that don't connect to anything
     Camera = pseudoCamera
@@ -1983,7 +2011,7 @@ class ScanApp():
         # Close the scan GUI window
         self.root.quit()
 
-
+import keyboard
 def fluenceScan(dsPosList, hwpPosList, exposure, gain, scanDir, dsWait = 0.5, hwpWait = 60, loopsPerHwpPos = 10):
     scanLive = True
     # Initialize camera
@@ -2039,17 +2067,27 @@ def fluenceScan(dsPosList, hwpPosList, exposure, gain, scanDir, dsWait = 0.5, hw
             for p in range(len(dsPosList)):
                 tifffile.imwrite(f'{scanDir}//loop{L}//fi={f}_pi={p}.tiff',zeroImage)
         
-        for fi in range(len(hwpPosList)):
+        for f in range(len(hwpPosList)):
+            if L%2 == 0:
+                fi = f
+            else:
+                fi = len(hwpPosList) - (1+f)
+                
             # move to next hwp pos
-            hwp.setPos(hwpPosList[fi])
+            hwp.moveAbsolute(hwpPosList[fi])
             print(f'fi = {fi}, hwpPos = {hwpPosList[fi]}')
             print(f'Waiting for {hwpWait} seconds at this hwp position so that temp is steady')
+            print(f'hwp read back position = {hwp.getPos()}')
             time.sleep(hwpWait)
             for li in range(loopsPerHwpPos):
                 for pi in range(len(dsPosList)):
+                    # check for user attempting to exit
+                    if keyboard.is_pressed('ESC'):
+                        scanLive = False
+                        print('Gentle Stop Activated')
+                    
                     ds.setPos(dsPosList[pi])
                     print(f'pi = {pi}, dsPos = {dsPosList[pi]}')
-                    print(f'Waiting for {dsWait} seconds at this ds position')
                     time.sleep(dsWait)
                     
                     # Trigger the camera
@@ -2060,13 +2098,14 @@ def fluenceScan(dsPosList, hwpPosList, exposure, gain, scanDir, dsWait = 0.5, hw
                     # In this loop directory, loads the image associated with this fi and pi
                     imAvg = tifffile.imread(f'{scanDir}//loop{L}//fi={fi}_pi={pi}.tiff')
                     imAvg = np.array((newImage + li*imAvg)/(li+1),dtype=image_dtype) # moving average
-                    tifffile.imwrite(f'{self.scanDir}//loop{L}//fi={fi}_pi={pi}.tiff',imAvg) # save the updated image
+                    tifffile.imwrite(f'{scanDir}//loop{L}//fi={fi}_pi={pi}.tiff',imAvg) # save the updated image
                     
                     
-
 if __name__ == '__main__':
     # ~ incrementBatchMetaDataWeight(r"C:\Users\thoma\OneDrive\Documents\GitHub\smartScan\test\batch0\batchMetaData.txt", 1)
     # ~ a, b= readBatchMetaDataWeight(r"C:\Users\thoma\OneDrive\Documents\GitHub\smartScan\test\batch1\batchMetaData.txt", 4)
     # ~ print(a, b)
     # ~ app = SetupApp()
-    fluenceScan([1,2,3],[10,20,30],1,30,r'C:\Users\thoma\OneDrive\Documents\GitHub\smartScan\test')
+    dsPositions = [1,2,3]
+    hwpPositions = [10, 20, 30]
+    fluenceScan([1,2,3],[10,20,30],1,30,r'C:\Users\thoma\OneDrive\Documents\GitHub\smartScan\test', dsWait = 0.1, hwpWait = 1, loopsPerHwpPos = 4)
