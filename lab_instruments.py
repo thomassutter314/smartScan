@@ -1,10 +1,10 @@
 import time
 import numpy as np
-import pyvisa
 
-TESTING = False
+TESTING = True
 
 if TESTING == False:
+    import pyvisa
     import PySpin
     import clr
     from clr import System
@@ -407,7 +407,8 @@ class pseudoHalfWavePlate():
         print(f'Setting HWP Pos to {val} (pseudo hwp)')
     def getPos(self):
         return 0
-
+    def disconnect(self):
+        print('disconnect from pseudo half wave plate')
 
 if TESTING == True:
     # In test mode we redefine these classes as test objects that don't connect to anything

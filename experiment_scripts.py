@@ -6,7 +6,7 @@ import datetime
 import os
 import tifffile
 
-def fluenceScan(dsPosList, hwpPosList, exposure, gain, scanDir, dsWait = 0.5, hwpWait = 10, loopsPerHwpPos = 4):
+def fluenceScan(dsPosList, hwpPosList, exposure, gain, scanDir, dsWait = 0.5, hwpWait = 1, loopsPerHwpPos = 3):
     scanLive = True
     # Initialize camera
     camera = lab_instruments.Camera()
@@ -33,8 +33,7 @@ def fluenceScan(dsPosList, hwpPosList, exposure, gain, scanDir, dsWait = 0.5, hw
     print(f'scanDir = {scanDir}')
     
     # Record the metadata of the scan
-    now = datetime.datetime.now()
-    nowString = now.strftime("%Y_%m_%d-%H_%M_%S")
+    nowString = datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
     scanParamsDict = { \
                     'scanStartTime':nowString,\
                     'gain':str(gain),\
@@ -47,17 +46,20 @@ def fluenceScan(dsPosList, hwpPosList, exposure, gain, scanDir, dsWait = 0.5, hw
     with open(f'{scanDir}//scanMetaData_{nowString}.txt','w') as smdf:
         for key, value in scanParamsDict.items():
             smdf.write('%s:%s\n' % (key, value))
-            
+    
     original_umask = os.umask(0)
 
     #pi will be position index, fi will be fluence index, li will be loop index (loops at the same fluence)
     L = -1 # This counts which loop we are on
     
     # Wait here for user to begin scan
-    beginCode = input('Press enter to start fluence scan ')
+    print('________________________________')
+    beginCode = input('PRESS ENTER TO START FLUENCE SCAN \n')
+    
     if beginCode != '':
         scanLive = False
-    
+        
+    t_start = time.time()
     while scanLive:
         # Increment the loop number, create a directory to store the images of this loop, populate with empty images
         L += 1
@@ -66,6 +68,10 @@ def fluenceScan(dsPosList, hwpPosList, exposure, gain, scanDir, dsWait = 0.5, hw
         for f in range(len(hwpPosList)):
             for p in range(len(dsPosList)):
                 tifffile.imwrite(f'{scanDir}//loop{L}//fi={f}_pi={p}.tiff',zeroImage)
+        
+        # Run log for this loop
+        runLog = f'Loop {L} started at {datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")} \n'
+        runLogFileName = f'runLog_{L}.txt'  
         
         for f in range(len(hwpPosList)):
             if L%2 == 0:
@@ -95,12 +101,20 @@ def fluenceScan(dsPosList, hwpPosList, exposure, gain, scanDir, dsWait = 0.5, hw
                     # code waits here until new image is available
                     newImage = camera.grabImage()
                     
+                    readBackDsPos = ds.getPos()
+                    readBackHwpPos = hwp.getPos()
+                    # Record this info in the run log
+                    runLog += f'\t fi = {fi}, pi = {pi}, li = {li}: dsSetPos = {dsPosList[pi]}, dsReadBack = {readBackDsPos}, hwpSetPos = {hwpPosList[fi]}, hwpReadBack = {readBackHwpPos}, t-t_start = {round(time.time() - t_start,2)}\n'
+                    
                     # In this loop directory, loads the image associated with this fi and pi
                     imAvg = tifffile.imread(f'{scanDir}//loop{L}//fi={fi}_pi={pi}.tiff')
                     imAvg = np.array((newImage + li*imAvg)/(li+1),dtype=image_dtype) # moving average
                     tifffile.imwrite(f'{scanDir}//loop{L}//fi={fi}_pi={pi}.tiff',imAvg) # save the updated image
-    
-    
+        
+        # Save the run log for this loop
+        with open(scanDir + '//' + runLogFileName, "w") as text_file:
+            text_file.write(runLog)
+        
     # Disconnect from devices    
     ds.disconnect() # disconnect from delay stage
     #  Ending acquisition appropriately helps ensure that devices clean up
@@ -111,4 +125,4 @@ def fluenceScan(dsPosList, hwpPosList, exposure, gain, scanDir, dsWait = 0.5, hw
     hwp.disconnect()
 
 
-fluenceScan([61,62,63],[71,72,73],1,30,r'C:\Users\Kogar\Documents\GitHub\smartScan\testDir')
+fluenceScan([61,62,63],[71,72,73],1,30,r'C:\Users\thoma\OneDrive\Documents\GitHub\smartScan\testDir')

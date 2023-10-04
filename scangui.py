@@ -1283,6 +1283,9 @@ class ScanApp():
             b += 1 # Record that a new batch is being taken, note that b is initiated at a value of -1
             self.batchNumber_label_string.set(f"batch # = {b}") # Write the current batch number to the gui
             
+            # Log batch start time
+            self.runLog += f'batch {b} started at {datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")} \n'
+            
             # Create a directory for the new batch files
             os.makedirs(f'{self.scanDir}//batch{b}')
             
@@ -1328,8 +1331,14 @@ class ScanApp():
                     # Give a wait for the motor time
                     time.sleep(self.dsWait)
                     
+                    # read back the delay stage position
+                    dsReadBack = self.ds.getPos()
+                    
                     # Write the current ds pos to the gui
-                    self.dsPosition_label_string.set(f"dsPos = {self.ds.getPos()} mm")
+                    self.dsPosition_label_string.set(f"dsPos = {dsReadBack} mm")
+                    
+                    # Record the current ds pos and the read back pos in the run log
+                    self.runLog += f'\t \t Delay Stage Set: pi = {pi}, dsSet = {dsPos}, dsReadBack = {dsReadBack}| (t-t_start) =  {round(time.time()-self.t_start,2)} \n'
                     
                     # Sends the software trigger to the camera
                     self.camera.trigger()
@@ -1398,7 +1407,7 @@ class ScanApp():
             np.savetxt(self.scanDir + '//' + 'roiScanData.csv',self.roiScanData,delimiter=',')
             np.savetxt(self.scanDir + '//' + 'timeHistory.csv',self.timeHistory,delimiter=',')
             
-            # SCAF, save the run log to a txt file
+            # Save the run log to a txt file
             with open(self.scanDir + '//' + self.runLogFileName, "w") as text_file:
                 text_file.write(self.runLog)
             if len(self.runLog) > 1e5:
@@ -1409,9 +1418,7 @@ class ScanApp():
         self.endScan()
     
     def processImage(self, image, pi, s, b, t_image):
-        print(pi)
         bi_calc = s%self.batchSize
-        self.runLog += f'\t \t processImage thread image acquired for pi = {pi}, s = {s} | (t-t_start) =  {round(t_image-self.t_start,2)} \n'
         # Record image process info in the batch meta data file                            
         incrementBatchMetaDataWeight(fileDir=f'{self.scanDir}//batch{b}//batchMetaData.txt', pi = pi)        
         
@@ -1519,7 +1526,7 @@ class ScanApp():
             # save the corrections log
             np.savetxt(self.scanDir + '//' + f'tcorrLog_batch.csv',self.tcorr_log,delimiter=',')
         
-        # SCAF, save the run log to a txt file
+        # Save the run log to a txt file
         with open(self.scanDir + '//' + self.runLogFileName, "w") as text_file:
             text_file.write(self.runLog)
                 
