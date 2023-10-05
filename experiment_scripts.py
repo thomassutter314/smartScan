@@ -124,5 +124,5 @@ def fluenceScan(dsPosList, hwpPosList, exposure, gain, scanDir, dsWait = 0.5, hw
     # disconnect from hwp
     hwp.disconnect()
 
-
-fluenceScan([61,62,63],[71,72,73],1,30,r'C:\Users\thoma\OneDrive\Documents\GitHub\smartScan\testDir')
+if __name__ == '__main__':
+    fluenceScan([61,62,63],[71,72,73],1,30,r'C:\Users\thoma\OneDrive\Documents\GitHub\smartScan\testDir')

@@ -1,0 +1,9 @@
+scanStartTime:2023_10_04-19_08_04
+gain:30
+exposure:1
+dsPositions:(10,20,1)
+batchSize:4
+translationCorrection:0
+smartScan:0
+scansweepselection:quasi random
+directory:C:\Users\thoma\OneDrive\Documents\GitHub\smartScan\testDir

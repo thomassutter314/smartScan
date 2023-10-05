@@ -47,7 +47,7 @@ import time
 import datetime
 import threading
 import tifffile
-# ~ import cv2
+
 import json
 import os
 import io
@@ -84,7 +84,7 @@ def popupmsg(msg):
     label.pack(side="top", fill="x", pady=10)
     B1 = ttk.Button(popup, text="Okay", command = popup.destroy)
     B1.pack()
-    # ~ popup.mainloop()
+    
 def update_errorbar(errobj, x, y, xerr=None, yerr=None):
     ln, caps, bars = errobj
 
@@ -180,7 +180,7 @@ def readBatchMetaDataWeight(fileDir, pi):
                 indexWeight = metaData[l].find(weightString) + len(weightString)
                 weight = int(metaData[l][indexWeight:])
                 return weight
-                        
+                                
 
 class RoiRectangle():
     def __init__(self,cx,cy,w,h,ax):
@@ -468,6 +468,10 @@ class SetupApp():
             command=clearDataButtonFunc)
         
         # Adding the scan controls
+        scanSweepSelection_label = tk.Label(master=self.scanFrame,text='Scan Sweep Selection',bg=cntrlBg)
+        self.scanSweepSelection = tk.StringVar(self.controls)
+        self.scanSweepSelection.set("quasi random") # default value
+        scanSweepSelection_button = tk.OptionMenu(self.scanFrame, self.scanSweepSelection, "one direction", "back and forth", "quasi random", 'full random')
         scanDsPos_label = tk.Label(master=self.scanFrame,text="dsPos Scan List: (start,end,step)",bg=cntrlBg)
         self.scanDsPosEntry = tk.Entry(master=self.scanFrame,width=largeEntryWidth)
         tzpos_label = tk.Label(master=self.scanFrame,text="time zero position (mm)",bg=cntrlBg)
@@ -538,6 +542,8 @@ class SetupApp():
             command=imageSetButtonFunc)
         
         # Pack controls
+        scanSweepSelection_label.pack()
+        scanSweepSelection_button.pack(pady=padyControls)
         add_roi_button.pack(pady=padyControls)
         self.saveRoisButton.pack(pady=padyControls)
         self.loadRoisButton.pack(pady=padyControls)
@@ -685,7 +691,19 @@ class SetupApp():
         # If 2 we start a scan
         if self.camLive == 2:
             print('Starting Scan')
+            
             scanDir = str(self.scanDirLocEntry.get())
+            
+            # Make sure this directory isn't a previous scan's directory
+            while os.path.isdir(f'{scanDir}//average'):
+                print('Warning! scanDir has files in it, making a new scan dir')
+                scanDir = scanDir + '_new'
+                original_umask = os.umask(0)
+                os.makedirs(f'{scanDir}')
+                os.umask(original_umask)
+                print(f'New dir is {scanDir}')
+            
+            scansweepselection =  str(self.scanSweepSelection.get())
             print(scanDir)
             now = datetime.datetime.now()
             nowString = now.strftime("%Y_%m_%d-%H_%M_%S")
@@ -697,6 +715,7 @@ class SetupApp():
                             'batchSize':str(self.batchSizeEntry.get()),\
                             'translationCorrection':str(self.varTransCorr.get()),\
                             'smartScan':str(self.varSmartScan.get()),\
+                            'scansweepselection':scansweepselection,\
                             'directory':scanDir}
             with open(f'{scanDir}//scanMetaData_{nowString}.txt','w') as smdf:
                 for key, value in scanParamsDict.items():
@@ -711,7 +730,7 @@ class SetupApp():
             self.root.destroy() # Totally destroy the setup gui so we can move into the scan gui
             
             scanapp = ScanApp(camera=self.camera,ds=self.ds,dsPositions=dsPositions,batchSize=batchSize, \
-                              translationCorrectionQ=tcq, smartScanQ=ssq, scanDir=scanDir, tzpos=tzpos, rm=self.rm)
+                              translationCorrectionQ=tcq, smartScanQ=ssq, scanDir=scanDir, tzpos=tzpos, rm=self.rm, scansweepselection = scansweepselection)
         else:
             print('Disconnecting camera and delay stage')
             self.ds.disconnect() # disconnect from delay stage
@@ -767,8 +786,8 @@ class SetupApp():
                         break # Exits the loop on the first occurance of a ROI to remove.
                         
                         
-            self.lineProfile_v.set_xdata(self.lineProfile_x)
-            self.lineProfile_h.set_ydata(self.lineProfile_y)
+            self.lineProfile_v.set_xdata([self.lineProfile_x])
+            self.lineProfile_h.set_ydata([self.lineProfile_y])
             self.lineProfilePlot_v.set_xdata(self.displayImage[:,int(self.lineProfile_x)])
             self.camAx[1].set_xlim(min(self.displayImage[:,int(self.lineProfile_x)])-0.01,max(self.displayImage[:,int(self.lineProfile_x)])+0.01)
             self.lineProfilePlot_h.set_ydata(self.displayImage[int(self.lineProfile_y),:])
@@ -822,7 +841,6 @@ class SetupApp():
         if event.inaxes == ax:
             if self.roiActive:
                 self.rm[-1].updateShape(abs(event.xdata - self.rm[-1].cx)*2,abs(event.ydata - self.rm[-1].cy)*2) # width, height
-                
                 self.canvas.draw()
     
     def saveImage(self):
@@ -894,13 +912,13 @@ class SetupApp():
             
             # Compute the image rate
             deltaTString = '%.3f' % round(time.time()-self.t1,5)
-            self.camAx[0].set_title(f"Image Rate =  {deltaTString} s, ROI # = {len(self.rm)}")
+            self.camAx[0].set_title(f"Image Rate =  {deltaTString} s, ROI # = {len(self.rm)} \n Pixel Value {round(self.displayImage[int(self.lineProfile_y),int(self.lineProfile_x)],1)}")
             
             self.t1 = time.time()
             
             self.camImageObj.set_data(self.displayImage) # Set image data to the plot
-            self.lineProfile_v.set_xdata(self.lineProfile_x)
-            self.lineProfile_h.set_ydata(self.lineProfile_y)
+            self.lineProfile_v.set_xdata([self.lineProfile_x])
+            self.lineProfile_h.set_ydata([self.lineProfile_y])
             self.lineProfilePlot_v.set_xdata(self.displayImage[:,int(self.lineProfile_x)])
             self.camAx[1].set_xlim(min(self.displayImage[:,int(self.lineProfile_x)]),max(self.displayImage[:,int(self.lineProfile_x)]))
             self.lineProfilePlot_h.set_ydata(self.displayImage[int(self.lineProfile_y),:])
@@ -979,7 +997,7 @@ class SetupApp():
         self.camImage = self.camera.grabImage()
         
 class ScanApp():
-    def __init__(self, camera, ds, dsPositions, batchSize, translationCorrectionQ, smartScanQ, scanDir, tzpos, rm, dsWait = 0.1, wait = .033):
+    def __init__(self, camera, ds, dsPositions, batchSize, translationCorrectionQ, smartScanQ, scanDir, tzpos, rm, scansweepselection, dsWait = 0.1, wait = .033):
         self.camera=camera
         self.ds=ds
         self.exposure=self.camera.getExposure()
@@ -992,6 +1010,7 @@ class ScanApp():
         self.dsWait = dsWait
         self.tzpos = tzpos
         self.rm = rm
+        self.scansweepselection = scansweepselection
         
         now = datetime.datetime.now()
         self.runLog = f'scan app started at {now.strftime("%Y_%m_%d-%H_%M_%S")} \n'
@@ -1242,13 +1261,7 @@ class ScanApp():
         self.runLog += f'dataAcquisitionLoop started at {datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")} \n'
         
         original_umask = os.umask(0)
-        while os.path.isdir(f'{self.scanDir}//average'):
-            print('Warning! scanDir is already filled, making a new scan dir')
-            self.errorLog_label_string.set(self.errorLog_label_string.get() + f'W: scanDir has data in it \n changing to scanDir_new \n')
-            self.runLog += f'WARNING: scanDir({self.scanDir}) has data in it. Changing scanDir to {self.scanDir}_new \n'
-            self.scanDir = self.scanDir + '_new'
-        else:
-            self.errorLog_label_string.set(self.errorLog_label_string.get() + f'all clear')
+        self.errorLog_label_string.set(self.errorLog_label_string.get() + f'all clear')
              
         os.makedirs(f'{self.scanDir}//average',self.dirPermission) # Create a directory for the batch average files
         os.umask(original_umask)
@@ -1311,18 +1324,12 @@ class ScanApp():
                 # Log scan start time
                 self.runLog += f'\t scan {s} (bi = {bi}) started at {datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")} \n'
                 
+                # Get the position index list depending on scan sweep option
+                piList = self.computePiList(s)
+                
                 ### Start a new scan ###
                 for p in range(len(self.dsPositions)):
-                    # ~ # Compute the next ds pos
-                    # ~ if self.s%2==0:
-                        # ~ self.pi = p
-                        # ~ dsPos = self.dsPositions[self.pi] # if s is even, go through the list the normal way
-                    # ~ else:
-                        # ~ self.pi = len(self.dsPositions)-(1+p)
-                        # ~ dsPos = self.dsPositions[self.pi] # if s is odd, go through the list backwards
-                    
-                    # One Direction Scan
-                    pi = p
+                    pi = piList[p]
                     dsPos = self.dsPositions[pi]
                     
                     # Move to the next ds pos
@@ -1509,6 +1516,43 @@ class ScanApp():
         now = datetime.datetime.now()
         self.runLog += f'movingAverageBatch thread completed for b = {b} at {now.strftime("%Y_%m_%d-%H_%M_%S")} \n'
     
+    def computePiList(self, s, probability = 0.1):
+        pi_array_init = np.array(range(len(self.dsPositions)))
+        
+        if self.scansweepselection == 'one direction':
+            return list(pi_array_init)
+        
+        if self.scansweepselection == 'back and forth':
+            if s%2 == 0:
+                pi_array_final = pi_array_init
+            else:
+                pi_array_final = pi_array_init[::-1]
+            return list(pi_array_final)
+            
+        if self.scansweepselection == 'full random':
+            np.random.shuffle(pi_array_init)
+            return list(pi_array_init)
+            
+        if self.scansweepselection == 'quasi random':
+            if s%2 == 0:
+                pi_list = list(pi_array_init)
+            else:
+                pi_list = list(pi_array_init[::-1])
+            
+            pi_list_final = []
+            
+            while len(pi_list) > 1:
+                for i in range(len(pi_list)):
+                    coinflip = np.random.choice([False, True], p=[1 - probability, probability])
+                    if coinflip:
+                        pi_list_final.append(pi_list.pop(i))
+                        break
+                        
+            # No need to run the random choice on the last element of pi_list
+            pi_list_final.append(pi_list.pop(0))
+                    
+            return pi_list_final
+                
     def endScan(self, finalImage, finalScanNumber, makeDataPlots = True):
         # Disconnect from devices    
         self.ds.disconnect() # disconnect from delay stage
