@@ -1,14 +1,14 @@
-Experiment start time  = 2023_10_04-19_08_06
-batch 0 started at 2023_10_04-19_08_06 
-batchSize = 4
-pi = 0, dsPos = 10.0 mm, weight = 4
-pi = 1, dsPos = 11.0 mm, weight = 4
-pi = 2, dsPos = 12.0 mm, weight = 4
-pi = 3, dsPos = 13.0 mm, weight = 3
-pi = 4, dsPos = 14.0 mm, weight = 4
-pi = 5, dsPos = 15.0 mm, weight = 4
-pi = 6, dsPos = 16.0 mm, weight = 4
-pi = 7, dsPos = 17.0 mm, weight = 4
-pi = 8, dsPos = 18.0 mm, weight = 4
-pi = 9, dsPos = 19.0 mm, weight = 4
-pi = 10, dsPos = 20.0 mm, weight = 4
+Experiment start time  = 2023_10_05-20_28_01
+batch 0 started at 2023_10_05-20_28_01 
+batchSize = 1
+pi = 0, dsPos = 60.0 mm, weight = 1
+pi = 1, dsPos = 61.0 mm, weight = 1
+pi = 2, dsPos = 62.0 mm, weight = 1
+pi = 3, dsPos = 63.0 mm, weight = 1
+pi = 4, dsPos = 64.0 mm, weight = 1
+pi = 5, dsPos = 65.0 mm, weight = 1
+pi = 6, dsPos = 66.0 mm, weight = 1
+pi = 7, dsPos = 67.0 mm, weight = 1
+pi = 8, dsPos = 68.0 mm, weight = 1
+pi = 9, dsPos = 69.0 mm, weight = 1
+pi = 10, dsPos = 70.0 mm, weight = 1

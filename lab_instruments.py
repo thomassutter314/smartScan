@@ -390,7 +390,18 @@ class pseudoCamera():
         # ~ return  np.array((self.counter%11)*1000*np.random.random([500,500]), dtype = 'uint16')
         # ~ return  np.array(9000*np.random.random([500,500]), dtype = 'uint16')
         # ~ return np.array(5000*(np.zeros([500,500]) + 1), dtype = 'uint16')
-        return np.array(np.random.normal(loc = 50000,scale = 1000,size = (500,500)), dtype = 'uint16')
+        print(self.counter)
+        
+        if self.counter > 25:
+            self.counter = 0
+            
+        if self.counter < 10:
+            return np.array(np.random.normal(loc = 10000, scale = 1000, size = (500,500)), dtype = 'uint16')
+            
+        if self.counter >= 10:
+            return np.array(np.random.normal(loc = 10000 - (self.counter - 9)**3, scale = 1000, size = (500,500)), dtype = 'uint16')
+
+            
     def getExposure(self):
         return self.pseudoExposure
     def getGain(self):

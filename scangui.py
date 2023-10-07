@@ -43,12 +43,15 @@ import numpy as np
 import scipy
 from scipy import fft
 from scipy.ndimage import median_filter
+from scipy import optimize as opt
 import time
 import datetime
 import threading
 import tifffile
 
 import json
+import csv
+from itertools import zip_longest
 import os
 import io
 import sys
@@ -180,7 +183,35 @@ def readBatchMetaDataWeight(fileDir, pi):
                 indexWeight = metaData[l].find(weightString) + len(weightString)
                 weight = int(metaData[l][indexWeight:])
                 return weight
-                                
+
+def func_erfexpdecay(x, x0, sigma, A, gamma):
+    # ~ decay = np.ones(len(x))
+    # ~ mask = x < x0
+    # ~ decay[mask] = np.exp(gamma*(x[mask]-x0))
+    decay = 0.5*(1 + np.tanh(gamma*x))
+    return 1 - A/2*(1+scipy.special.erf((x0-x)/(np.sqrt(2)*sigma))) * decay
+    # ~ popt, pcov = opt.curve_fit(func, xdata, ydata, p0 = guess)
+    # ~ return popt
+                               
+def findtzpos(xdata, ydata):
+    matplotlib.use('TkAgg')
+    yrmserr = []
+    ydata = (ydata - min(ydata))/(max(ydata)-min(ydata)) # Normalize and scale data
+    
+    plt.scatter(xdata,ydata)
+    plt.figure()
+    
+    for i in range(len(ydata)):
+        yrmserr.append(np.sqrt(np.mean((ydata[:i+1] - 1)**2)))
+    
+    yrmserr_filtered = scipy.signal.medfilt(yrmserr, kernel_size=3)
+    
+    plt.scatter(xdata, yrmserr, c = 'blue')
+    plt.scatter(xdata, yrmserr_filtered, c = 'red')
+    plt.show()
+
+    
+                                    
 
 class RoiRectangle():
     def __init__(self,cx,cy,w,h,ax):
@@ -229,6 +260,13 @@ class RoiRectangle():
 
 class SetupApp():
     def __init__(self, wait = .033):
+        # Load the persistent_settings
+        persistent_settings_dict = {}
+        with open('persistent_settings.txt','r') as f:
+            for line in f:
+                if line[:line.find(":")] != '#':
+                    persistent_settings_dict[line[:line.find(":")]] = line[line.find(":")+1:].replace('\n','')
+        
         # Setup the tkinter GUI window
         self.root = tk.Tk()
         self.root.geometry("1000x700")
@@ -446,12 +484,46 @@ class SetupApp():
             command=dsPos2ButtonFunc)
             
         # Adding the data plot controls
+        
         def newPointButtonFunc():
-            self.resetHistory = True
-        def clearDataButtonFunc():
-            self.resetHistory = True
-            self.resetLongHistory = True
+            if self.resetHistory == False:
+                self.resetHistory = True
+                self.newPointButton.config(text='Continue',bg='yellow')
+            else:
+                self.resetHistory = False
+                self.newPointButton.config(text='New Point',bg='white')
             
+        def clearDataButtonFunc():
+            self.resetLongHistory = True
+        
+        def saveDataButtonFunc():
+            defaultFileName = 'data.csv'
+            fileLoc = tk.filedialog.asksaveasfile(mode='w',initialfile=defaultFileName,defaultextension=".*",filetypes = [("csv files", ".csv")])
+                      
+            # Your list of lists
+            listOlists = [['timeHistory'] + list(self.timeHistory),
+                          ['intensityHistory'] + list(self.intensityHistory),
+                          ['avgIntensity'] + list(self.avgIntensity),
+                          ['stdIntensity'] + list(self.stdIntensity)]
+            
+            # Determine the maximum length of the sublists
+            max_length = max(len(sublist) for sublist in listOlists)
+            
+            # Fill shorter sublists with placeholders (empty strings)
+            listOlists = [sublist + [''] * (max_length - len(sublist)) for sublist in listOlists]
+            
+            # Transpose the list of lists to get separate columns
+            transposed_list = list(map(list, zip(*listOlists)))
+            
+            # Open the CSV file in write mode
+            with open(fileLoc.name, mode='w', newline='') as file1:
+                # Create the CSV writer object
+                writer = csv.writer(file1, delimiter = ",", quotechar = '"')
+                
+                # Write each row (column) from the transposed list
+                for row in transposed_list:
+                    writer.writerow(row)
+                    
         self.newPointButton = tk.Button(
             master=self.controls,
             text="New Point",
@@ -466,6 +538,13 @@ class SetupApp():
             height=1,
             fg='black', bg='white',
             command=clearDataButtonFunc)
+        self.saveDataButton = tk.Button(
+            master=self.controls,
+            text="Save Data",
+            width=buttonWidth,
+            height=1,
+            fg='black', bg='white',
+            command=saveDataButtonFunc)
         
         # Adding the scan controls
         scanSweepSelection_label = tk.Label(master=self.scanFrame,text='Scan Sweep Selection',bg=cntrlBg)
@@ -474,9 +553,10 @@ class SetupApp():
         scanSweepSelection_button = tk.OptionMenu(self.scanFrame, self.scanSweepSelection, "one direction", "back and forth", "quasi random", 'full random')
         scanDsPos_label = tk.Label(master=self.scanFrame,text="dsPos Scan List: (start,end,step)",bg=cntrlBg)
         self.scanDsPosEntry = tk.Entry(master=self.scanFrame,width=largeEntryWidth)
+        self.scanDsPosEntry.insert(-1,persistent_settings_dict['dsPositions'])
         tzpos_label = tk.Label(master=self.scanFrame,text="time zero position (mm)",bg=cntrlBg)
         self.tzposEntry = tk.Entry(master=self.scanFrame,width=largeEntryWidth)
-        self.tzposEntry.insert(-1,0)
+        self.tzposEntry.insert(-1,persistent_settings_dict['tzpos'])
         scanBatchSize_label = tk.Label(master=self.scanFrame,text="Batch Size",bg=cntrlBg)
         self.batchSizeEntry = tk.Entry(master=self.scanFrame,width=largeEntryWidth)
         self.batchSizeEntry.insert(-1,1)
@@ -484,6 +564,8 @@ class SetupApp():
         self.scanDirLocEntry = tk.Entry(master=self.scanFrame,width=largeEntryWidth)
         self.varTransCorr = tk.IntVar()
         self.transCorrBox = tk.Checkbutton(master=self.scanFrame, text='Translation Correction',variable=self.varTransCorr, onvalue=1, offvalue=0,bg=cntrlBg)
+        self.varScanMedianFilter = tk.IntVar()
+        self.scanMedianFilterBox = tk.Checkbutton(master=self.scanFrame, text='Median Filter for Scan',variable=self.varScanMedianFilter, onvalue=1, offvalue=0,bg=cntrlBg)        
         self.varSmartScan = tk.IntVar()
         self.smartScanBox = tk.Checkbutton(master=self.scanFrame, text='Smart Scan ®',variable=self.varSmartScan, onvalue=1, offvalue=0,bg=cntrlBg)
         
@@ -567,6 +649,7 @@ class SetupApp():
         tk.Frame(master=self.controls, bd=100, relief='flat',height=sepHeight,width=sepWidth,bg='black').pack(side='top', pady=padySep)
         self.newPointButton.pack(pady=padyControls)
         self.clearDataButton.pack(pady=padyControls)
+        self.saveDataButton.pack(pady=padyControls)
         self.avgDisBox.pack(pady=padyControls)
         self.medianFilterBox.pack(pady=padyControls)
         self.avgDirLoc_label.pack(pady=padyControls)
@@ -583,6 +666,7 @@ class SetupApp():
         scanDirLoc_label.pack(pady=padyControls)
         self.scanDirLocEntry.pack(pady=padyControls)
         self.transCorrBox.pack(pady=padyControls)
+        self.scanMedianFilterBox.pack(pady=padyControls)
         self.smartScanBox.pack(pady=padyControls)
         self.startScanButton.pack(pady=padyControls)
         
@@ -704,9 +788,10 @@ class SetupApp():
                 print(f'New dir is {scanDir}')
             
             scansweepselection =  str(self.scanSweepSelection.get())
-            print(scanDir)
-            now = datetime.datetime.now()
-            nowString = now.strftime("%Y_%m_%d-%H_%M_%S")
+            print(f'scanDir: {scanDir} \n')
+            
+            # Write the metadata file
+            nowString = datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
             scanParamsDict = { \
                             'scanStartTime':nowString,\
                             'gain':str(self.gainEntry.get()),\
@@ -721,16 +806,25 @@ class SetupApp():
                 for key, value in scanParamsDict.items():
                     smdf.write('%s:%s\n' % (key, value))
                     
+            # Update the persistent settings file
+            psParamsDict = { \
+                'tzpos':str(self.tzposEntry.get()),\
+                'dsPositions':str(self.scanDsPosEntry.get())}
+            with open(f'persistent_settings.txt','w') as psf:
+                for key, value in psParamsDict.items():
+                    psf.write('%s:%s\n' % (key, value))
+                    
             dsPositions = parsePosStr(str(self.scanDsPosEntry.get()))
             batchSize = int(self.batchSizeEntry.get())
             tcq = bool(self.varTransCorr.get())
+            smfq = bool(self.varScanMedianFilter.get())
             ssq = bool(self.varSmartScan.get())
             tzpos = float(self.tzposEntry.get())
             
             self.root.destroy() # Totally destroy the setup gui so we can move into the scan gui
             
             scanapp = ScanApp(camera=self.camera,ds=self.ds,dsPositions=dsPositions,batchSize=batchSize, \
-                              translationCorrectionQ=tcq, smartScanQ=ssq, scanDir=scanDir, tzpos=tzpos, rm=self.rm, scansweepselection = scansweepselection)
+                              translationCorrectionQ=tcq, scanMedianFilterQ=smfq, smartScanQ=ssq, scanDir=scanDir, tzpos=tzpos, rm=self.rm, scansweepselection = scansweepselection)
         else:
             print('Disconnecting camera and delay stage')
             self.ds.disconnect() # disconnect from delay stage
@@ -860,10 +954,10 @@ class SetupApp():
         
     def dataAcquisitionLoop(self):
         thrImage = None
-        while self.camLive == 1:
-            # ~ for thread in threading.enumerate(): 
-                # ~ print(thread.name)
-                        
+        self.processPrev = False
+        newPointSwitch = False
+        
+        while self.camLive == 1:                                    
             # Make sure the image thread has concluded
             if (thrImage != None) and (thrImage.is_alive()):
                 thrImage.join()
@@ -880,100 +974,119 @@ class SetupApp():
                 
                 # Turn off the update in progress variable
                 self.camSettingsUpdateInProgress = False
-            
+                        
             # Check at this point for early exit to loop
             if self.camLive != 1:
                 break
             
-            # Async Thread triggers the camera and then waits for the image to come in while updating the progress bar plot.
-            thrImage = threading.Thread(target=self.imageAcquire)
-            thrImage.start()
-            
-            # Processing on the previous image
-            
-            # Check whether we are saving image sets, saves the raw image (camImage)
-            if self.saveImageSet and self.avgDirLocEntry.get() != '':
-                tifffile.imwrite(f'{self.avgDirLocEntry.get()}//{time.time()}.tiff', self.camImage)
-            
-            # Check whether despeckle is applied
-            if self.varMedianFilter.get() == 1:
-                self.camImage = median_filter(self.camImage, size=2)
-            
-            # Check whether image averaging is selected in which the display will be updated to an average of all the images taken    
-            if self.varAvgDis.get() == 0:
-                self.displayImage = self.camImage
-                self.numAvgDis = 0
-            else:
-                self.displayImage = (self.camImage + self.numAvgDis*self.displayImage)/(self.numAvgDis+1)
-                self.numAvgDis += 1
-            
-            # Update the label to indicate the number of images that have been taken to create the displayed image
-            self.varAvgDis_label_string.set(f'Average Images (N = {self.numAvgDis})')
-            
-            # Compute the image rate
-            deltaTString = '%.3f' % round(time.time()-self.t1,5)
-            self.camAx[0].set_title(f"Image Rate =  {deltaTString} s, ROI # = {len(self.rm)} \n Pixel Value {round(self.displayImage[int(self.lineProfile_y),int(self.lineProfile_x)],1)}")
-            
-            self.t1 = time.time()
-            
-            self.camImageObj.set_data(self.displayImage) # Set image data to the plot
-            self.lineProfile_v.set_xdata([self.lineProfile_x])
-            self.lineProfile_h.set_ydata([self.lineProfile_y])
-            self.lineProfilePlot_v.set_xdata(self.displayImage[:,int(self.lineProfile_x)])
-            self.camAx[1].set_xlim(min(self.displayImage[:,int(self.lineProfile_x)]),max(self.displayImage[:,int(self.lineProfile_x)]))
-            self.lineProfilePlot_h.set_ydata(self.displayImage[int(self.lineProfile_y),:])
-            self.camAx[2].set_ylim(min(self.displayImage[int(self.lineProfile_y),:]),max(self.displayImage[int(self.lineProfile_y),:]))
-            
-            if len(self.rm) > 0:
-                roiPixelSum = 0
-                roiTotalArea = 0
-                # Loop through all the ROIS
-                for r in self.rm:
-                    # Only count an ROI if it is active
-                    if r.live:
-                        roiImage = np.array(self.camImage[int(r.cy-r.h/2):int(r.cy+r.h/2),int(r.cx-r.w/2):int(r.cx+r.w/2)], dtype = 'float64') # The roi sum is taken from single images even when averaging is on
-                        roiPixelSum += np.sum(roiImage)
-                        roiTotalArea += roiImage.shape[0]*roiImage.shape[1]
-                        
-                if roiTotalArea > 0:
-                    self.timeHistory.append(self.t1 - self.t0)
-                    self.intensityHistory.append(roiPixelSum/roiTotalArea)
-                    self.avgIntensity[-1] = np.mean(self.intensityHistory)
-                    self.stdIntensity[-1] = np.std(self.intensityHistory)/np.sqrt(len(self.intensityHistory))
-                    
-                    self.dataAx[0].set_xlim([min(self.timeHistory)-0.1,max(self.timeHistory)+0.1])
-                    self.dataAx[0].set_ylim([min(self.intensityHistory)-0.1,max(self.intensityHistory)+0.1])
-                    self.dataAx[1].set_xlim([-1,len(self.avgIntensity)])
-                    self.dataAx[1].set_ylim([min(self.avgIntensity-self.stdIntensity)-0.1,max(self.avgIntensity+self.stdIntensity)+0.1])
-    
-            self.liveIntensityPlot.set_xdata(self.timeHistory)
-            self.liveIntensityPlot.set_ydata(self.intensityHistory)
-                
-            update_errorbar(self.avgIntensityPlot,range(len(self.avgIntensity)),self.avgIntensity,yerr=self.stdIntensity)
-            
-            # Update the figures
-            self.canvas.draw()
-            self.datacanvas.draw()
-            
-            if self.resetHistory:
-                self.resetHistory = False
-                self.intensityHistory = []
-                self.timeHistory = []
-                self.avgIntensity = np.append(self.avgIntensity,[0])
-                self.stdIntensity = np.append(self.stdIntensity,[0])
-                
-                # Zero the display image if there is averaging
-                if self.varAvgDis.get() == 1:
-                    self.displayImage = 0*self.displayImage
-                    self.numAvgDis = 0
-                
-                self.t0 = time.time()
-                
+            # Check for a total reset of roi data plots
             if self.resetLongHistory:
                 self.resetLongHistory = False
+                                
+                self.intensityHistory = []
+                self.timeHistory = []
+                self.avgIntensity = np.append(self.avgIntensity,[0]) # Don't worry about the zeros, they are rewritten and don't through off the average or stdev
+                self.stdIntensity = np.append(self.stdIntensity,[0])
+                
+                # Zero the display image (necessary for averaging but no reason not to just always do it)
+                self.displayImage = 0*self.displayImage
+                self.numAvgDis = 0
+                
                 self.avgIntensity = np.array([0],dtype='float')
                 self.stdIntensity = np.array([0],dtype='float')
-        
+            
+            if self.resetHistory:
+                newPointSwitch = True
+            else:
+                # Async Thread triggers the camera and then waits for the image to come in while updating the progress bar plot.
+                thrImage = threading.Thread(target=self.imageAcquire)
+                thrImage.start()
+            
+            if self.processPrev:
+                # Check whether we are saving image sets, saves the raw image (camImage)
+                if self.saveImageSet and self.avgDirLocEntry.get() != '':
+                    tifffile.imwrite(f'{self.avgDirLocEntry.get()}//{time.time()}.tiff', self.camImage)
+                
+                # Check whether despeckle is applied
+                if self.varMedianFilter.get() == 1:
+                    self.camImage = median_filter(self.camImage, size=3)
+                
+                # Check whether image averaging is selected in which the display will be updated to an average of all the images taken    
+                if self.varAvgDis.get() == 0:
+                    self.displayImage = self.camImage
+                    self.numAvgDis = 0
+                else:
+                    self.displayImage = (self.camImage + self.numAvgDis*self.displayImage)/(self.numAvgDis+1)
+                    self.numAvgDis += 1
+                
+                # Update the label to indicate the number of images that have been taken to create the displayed image
+                self.varAvgDis_label_string.set(f'Average Images (N = {self.numAvgDis})')
+                
+                # Compute the image rate
+                deltaTString = '%.3f' % round(time.time()-self.t1,5)
+                # ~ print(type(self.displayImage[int(self.lineProfile_y),int(self.lineProfile_x)]))
+                self.camAx[0].set_title(f"Image Rate =  {deltaTString} s, ROI # = {len(self.rm)} \n Pixel Value {round(self.displayImage[int(self.lineProfile_y),int(self.lineProfile_x)],1)}")
+                
+                self.t1 = time.time()
+                
+                self.camImageObj.set_data(self.displayImage) # Set image data to the plot
+                self.lineProfile_v.set_xdata([self.lineProfile_x])
+                self.lineProfile_h.set_ydata([self.lineProfile_y])
+                self.lineProfilePlot_v.set_xdata(self.displayImage[:,int(self.lineProfile_x)])
+                self.camAx[1].set_xlim(min(self.displayImage[:,int(self.lineProfile_x)]),max(self.displayImage[:,int(self.lineProfile_x)]))
+                self.lineProfilePlot_h.set_ydata(self.displayImage[int(self.lineProfile_y),:])
+                self.camAx[2].set_ylim(min(self.displayImage[int(self.lineProfile_y),:]),max(self.displayImage[int(self.lineProfile_y),:]))
+                
+                if len(self.rm) > 0:
+                    roiPixelSum = 0
+                    roiTotalArea = 0
+                    # Loop through all the ROIS
+                    for r in self.rm:
+                        # Only count an ROI if it is active
+                        if r.live:
+                            roiImage = np.array(self.camImage[int(r.cy-r.h/2):int(r.cy+r.h/2),int(r.cx-r.w/2):int(r.cx+r.w/2)], dtype = 'float64') # The roi sum is taken from single images even when averaging is on
+                            roiPixelSum += np.sum(roiImage)
+                            roiTotalArea += roiImage.shape[0]*roiImage.shape[1]
+                            
+                    if roiTotalArea > 0:
+                        self.timeHistory.append(self.t1 - self.t0)
+                        self.intensityHistory.append(roiPixelSum/roiTotalArea)
+                        self.avgIntensity[-1] = np.mean(self.intensityHistory)
+                        self.stdIntensity[-1] = np.std(self.intensityHistory)/np.sqrt(len(self.intensityHistory))
+                        
+                        self.dataAx[0].set_xlim([min(self.timeHistory)-0.1,max(self.timeHistory)+0.1])
+                        self.dataAx[0].set_ylim([min(self.intensityHistory)-0.1,max(self.intensityHistory)+0.1])
+                        self.dataAx[1].set_xlim([-1,len(self.avgIntensity)])
+                        self.dataAx[1].set_ylim([min(self.avgIntensity-self.stdIntensity)-0.1,max(self.avgIntensity+self.stdIntensity)+0.1])
+                
+                self.dataAx[0].set_title(f"N = {len(self.intensityHistory)}")
+                self.liveIntensityPlot.set_xdata(self.timeHistory)
+                self.liveIntensityPlot.set_ydata(self.intensityHistory)
+                    
+                update_errorbar(self.avgIntensityPlot,range(len(self.avgIntensity)),self.avgIntensity,yerr=self.stdIntensity)
+                
+                # Update the figures
+                self.canvas.draw()
+                self.datacanvas.draw()
+                
+            if newPointSwitch:
+                self.processPrev = False
+                self.intensityHistory = []
+                self.timeHistory = []
+                self.avgIntensity = np.append(self.avgIntensity,[0]) # Don't worry about the zeros, they are rewritten and don't through off the average or stdev
+                self.stdIntensity = np.append(self.stdIntensity,[0])
+                
+                # Zero the display image (necessary for averaging but no reason not to just always do it)
+                self.displayImage = 0*self.displayImage
+                self.numAvgDis = 0
+                            
+            # Freeze here until user is ready to move on
+            while newPointSwitch and self.resetHistory:
+                time.sleep(self.wait)
+                self.t0 = time.time()
+                
+            newPointSwitch = False
+            
         # Make sure the image thread has concluded
         if (thrImage != None) and (thrImage.is_alive()):
             thrImage.join()
@@ -987,7 +1100,7 @@ class SetupApp():
         spf = self.wait + self.exposure/50
         
         # Runs the progress bar while it waits for the image
-        N = int(self.exposure/spf)
+        N = max([int(self.exposure/spf),1])
         self.imProgBar['value'] = 100/N
         for n in range(N):
             self.imProgBar.step(100/N)
@@ -995,9 +1108,10 @@ class SetupApp():
         
         # Grabs the image
         self.camImage = self.camera.grabImage()
+        self.processPrev = True # Tell the data acquisition loop that there is an image that needs processing
         
 class ScanApp():
-    def __init__(self, camera, ds, dsPositions, batchSize, translationCorrectionQ, smartScanQ, scanDir, tzpos, rm, scansweepselection, dsWait = 0.1, wait = .033):
+    def __init__(self, camera, ds, dsPositions, batchSize, translationCorrectionQ, scanMedianFilterQ, smartScanQ, scanDir, tzpos, rm, scansweepselection, dsWait = 0.1, wait = .033):
         self.camera=camera
         self.ds=ds
         self.exposure=self.camera.getExposure()
@@ -1005,6 +1119,7 @@ class ScanApp():
         self.dsPositions=dsPositions
         self.batchSize=batchSize
         self.translationCorrectionQ=translationCorrectionQ
+        self.scanMedianFilterQ = scanMedianFilterQ
         self.smartScanQ=smartScanQ
         self.scanDir=scanDir
         self.dsWait = dsWait
@@ -1429,6 +1544,9 @@ class ScanApp():
         # Record image process info in the batch meta data file                            
         incrementBatchMetaDataWeight(fileDir=f'{self.scanDir}//batch{b}//batchMetaData.txt', pi = pi)        
         
+        if self.scanMedianFilterQ:
+            image = median_filter(image, size=3)
+        
         # Update the ROI data plots
         if len(self.rm) > 0:
             if self.translationCorrectionQ:
@@ -1671,3 +1789,22 @@ class ScanApp():
                     
 if __name__ == '__main__':
     app = SetupApp()
+    # ~ matplotlib.use('TkAgg')
+    # ~ xx = np.arange(68,75,0.01)
+    # ~ yy = func_erfexpdecay(xx, 70, 0.1, 0.1, 1)
+    
+    # ~ plt.axvline(x = 70, c = 'black')
+    
+    # ~ plt.plot(xx, yy)
+    # ~ plt.show()
+    
+    # ~ xdata = [60,61,62,63,64,65,66,67,68,69,70,70.1,70.2,70.3,70.4,70.5,71,72,73,74,75,76,77,78,79,80]
+    # ~ ydata = [0.997474988,0.99752136,1.000630073,0.999152705,1.001928638,1.001994577,0.997330719,0.992401051,0.991166878,0.98204996,0.97696682,0.970637158,0.973671426,0.973139571,0.979787679,0.978655288,0.984136825,0.984312836,0.987501369,0.981860713,0.984735285,]
+    # ~ #ydata = np.array([1,1,1,1,1,1,1,1,1,0.9999,0.999,0.995,0.993,0.99,0.98,0.975,0.97,0.972,0.975,0.98,0.983,0.984,0.985,0.985,0.985,0.985])
+    # ~ ydata = np.array([1,1,1,1,1,1,1,1,1,0.9999,0.999,0.995,0.993,0.99,0.98,0.975,0.97,0.97,0.97,0.97,0.97,0.97,0.97,0.97,0.97,0.97])
+    # ~ ydata += np.random.normal(0, 0.005, size = len(ydata))
+    
+
+    # ~ t0 = findtzpos(xdata, ydata)
+    # ~ print(t0)
+    

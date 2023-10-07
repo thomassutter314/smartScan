@@ -1,8 +1,8 @@
-scanStartTime:2023_10_04-19_08_04
+scanStartTime:2023_10_05-20_28_00
 gain:30
 exposure:1
-dsPositions:(10,20,1)
-batchSize:4
+dsPositions:(60,70,1)
+batchSize:1
 translationCorrection:0
 smartScan:0
 scansweepselection:quasi random
