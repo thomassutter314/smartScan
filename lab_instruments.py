@@ -1,5 +1,6 @@
 import time
 import numpy as np
+import cv2
 
 TESTING = True
 
@@ -348,6 +349,24 @@ class HalfWavePlate():
         #print('commandString',commandString)
         self.rotationMount.write(commandString)
 
+class HayearCamera():
+    def __init__(self):
+        # Use 0 for the default camera (usually built-in), or specify the camera's index if you have multiple cameras.
+        self.cap = cv2.VideoCapture(1)
+        
+        # Check if the camera opened successfully.
+        if not self.cap.isOpened():
+            print("Error: Could not open the camera.")
+            exit()
+        
+    def grabImage(self):
+        # Capture an image.
+        ret, frame = self.cap.read()
+        return frame
+        
+    def disconnect(self):
+        self.cap.release()
+        
 class pseudoDelayStage():
     def __init__(self):
         print('This is a pseudo Delay Stage for testing')
@@ -386,7 +405,7 @@ class pseudoCamera():
         while (self.triggered == False) or ((time.time()-self.triggerTimer) < self.pseudoExposure):
             time.sleep(self.pseudoWait)
         self.triggered = False
-        self.counter += 1
+        self.counter += 0
         # ~ return  np.array((self.counter%11)*1000*np.random.random([500,500]), dtype = 'uint16')
         # ~ return  np.array(9000*np.random.random([500,500]), dtype = 'uint16')
         # ~ return np.array(5000*(np.zeros([500,500]) + 1), dtype = 'uint16')
@@ -414,16 +433,30 @@ class pseudoCamera():
 class pseudoHalfWavePlate():
     def __init__(self):
         print('This is a pseudo half wave plate for testing')
+        self.pos = 0
     def moveAbsolute(self, val):
         print(f'Setting HWP Pos to {val} (pseudo hwp)')
+        self.pos = val
     def getPos(self):
-        return 0
+        return self.pos
     def disconnect(self):
         print('disconnect from pseudo half wave plate')
+
+class pseudoHayearCamera():
+    def __init__(self):
+        print('Pseudo Hayear cam for testing')
+        
+    def grabImage(self):
+        # Capture an image.
+        return np.random.random([100,100])
+        
+    def disconnect(self):
+        print('disconnect psuedo hayear cam')
+
 
 if TESTING == True:
     # In test mode we redefine these classes as test objects that don't connect to anything
     Camera = pseudoCamera
     DelayStage = pseudoDelayStage
     HalfWavePlate = pseudoHalfWavePlate
-    
+    HayearCamera = pseudoHayearCamera

@@ -1,11 +1,12 @@
-pi = 0, dsPos = 60.0 mm, weight = 1
-pi = 1, dsPos = 61.0 mm, weight = 1
-pi = 2, dsPos = 62.0 mm, weight = 1
-pi = 3, dsPos = 63.0 mm, weight = 1
-pi = 4, dsPos = 64.0 mm, weight = 1
-pi = 5, dsPos = 65.0 mm, weight = 1
-pi = 6, dsPos = 66.0 mm, weight = 1
-pi = 7, dsPos = 67.0 mm, weight = 1
-pi = 8, dsPos = 68.0 mm, weight = 1
-pi = 9, dsPos = 69.0 mm, weight = 1
-pi = 10, dsPos = 70.0 mm, weight = 1
+pi = 0, dsPos = 10.0 mm, fi = 0, fluence = 1.0 Ko, weight = 28
+pi = 0, dsPos = 10.0 mm, fi = 1, fluence = 2.0 Ko, weight = 30
+pi = 0, dsPos = 10.0 mm, fi = 2, fluence = 3.0 Ko, weight = 30
+pi = 0, dsPos = 10.0 mm, fi = 3, fluence = 4.0 Ko, weight = 30
+pi = 1, dsPos = 20.0 mm, fi = 0, fluence = 1.0 Ko, weight = 27
+pi = 1, dsPos = 20.0 mm, fi = 1, fluence = 2.0 Ko, weight = 30
+pi = 1, dsPos = 20.0 mm, fi = 2, fluence = 3.0 Ko, weight = 30
+pi = 1, dsPos = 20.0 mm, fi = 3, fluence = 4.0 Ko, weight = 30
+pi = 2, dsPos = 30.0 mm, fi = 0, fluence = 1.0 Ko, weight = 27
+pi = 2, dsPos = 30.0 mm, fi = 1, fluence = 2.0 Ko, weight = 30
+pi = 2, dsPos = 30.0 mm, fi = 2, fluence = 3.0 Ko, weight = 30
+pi = 2, dsPos = 30.0 mm, fi = 3, fluence = 4.0 Ko, weight = 30

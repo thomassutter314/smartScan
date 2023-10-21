@@ -1,2 +1,6 @@
 tzpos:69
-dsPositions:(60,70,1)
+dsPositions:[10,20,30]
+fluences:[1,2,3,4]
+pump_malus_A:23.4866
+pump_malus_phi:-10.805
+pump_malus_offset:0

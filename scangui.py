@@ -23,7 +23,7 @@ from tkinter import filedialog as fd
 from tkinter import ttk
 # ~ import random as rand
 import matplotlib
-matplotlib.use('TkAgg')
+# ~ matplotlib.use('TkAgg')
 # ~ from matplotlib.ticker import FormatStrFormatter
 from matplotlib.backends.backend_tkagg import FigureCanvasTk, NavigationToolbar2Tk
 import matplotlib.pyplot as plt
@@ -48,6 +48,8 @@ import time
 import datetime
 import threading
 import tifffile
+import cv2
+
 
 import json
 import csv
@@ -65,13 +67,21 @@ def parsePosStr(s):
     while len(s) > 0:
         i1 = 1 + s.find('(')
         i2 = s[i1:].find(')')
-        print(s)
-        print(s[i1:i1+i2].split(','))
-        start, stop, step = list(map(float,s[i1:i1+i2].split(',')))
-        newPosArr = np.arange(start,stop+step,step)
-        dsPositions = np.append(dsPositions,newPosArr)
-        s = s[i1+i2+1:]
-        print(s)
+        j1 = 1 + s.find('[')
+        j2 = s[j1:].find(']')
+        
+        if i1 != 0 and (i1 < j1 or j1 == 0):
+            print(s)
+            print(s[i1:i1+i2].split(','))
+            start, stop, step = list(map(float,s[i1:i1+i2].split(',')))
+            newPosArr = np.arange(start,stop+step,step)
+            dsPositions = np.append(dsPositions,newPosArr)
+            s = s[i1+i2+1:]
+            print(s)
+        if j1 != 0 and (j1 < i1 or i1 == 0):
+            newPosArr = list(map(float,s[j1:j1+j2].split(',')))
+            dsPositions = np.append(dsPositions,newPosArr)
+            s = s[j1+j2+1:]
         
     dsPositions.sort()
     dsPositions_unique = np.unique(dsPositions.round(4)) # rounds the values to 4 decimal places and removes duplicate positions
@@ -145,7 +155,6 @@ def update_errorbar(errobj, x, y, xerr=None, yerr=None):
         pass
 
 def incrementBatchMetaDataWeight(fileDir, pi, increment = 1):
-    # function runs on the average metadata too
     with open(fileDir, 'r') as f:
         metaData = f.readlines()
     
@@ -168,7 +177,6 @@ def incrementBatchMetaDataWeight(fileDir, pi, increment = 1):
         f.writelines(metaData)
 
 def readBatchMetaDataWeight(fileDir, pi):
-    # function runs on the average metadata too
     with open(fileDir, 'r') as f:
         metaData = f.readlines()
 
@@ -180,6 +188,54 @@ def readBatchMetaDataWeight(fileDir, pi):
             index_start = metaData[l].find(idString_start) + len(idString_start)
             index_finish = metaData[l].find(idString_finish)
             if pi == int(metaData[l][index_start:index_finish]):
+                indexWeight = metaData[l].find(weightString) + len(weightString)
+                weight = int(metaData[l][indexWeight:])
+                return weight
+
+def incrementAverageMetaDataWeight(fileDir, pi, fi, increment = 1):
+    # function runs on the average metadata too
+    with open(fileDir, 'r') as f:
+        metaData = f.readlines()
+
+    idString_1_start = f'pi = '
+    idString_1_finish = f', dsPos'
+    idString_2_start = f'fi = '
+    idString_2_finish = f', fluence'
+    weightString = f'weight = '
+    for l in range(len(metaData)):
+        if weightString in metaData[l]:
+            index_1_start = metaData[l].find(idString_1_start) + len(idString_1_start)
+            index_1_finish = metaData[l].find(idString_1_finish)
+            index_2_start = metaData[l].find(idString_2_start) + len(idString_2_start)
+            index_2_finish = metaData[l].find(idString_2_finish)
+            if pi == int(metaData[l][index_1_start:index_1_finish]) and fi == int(metaData[l][index_2_start:index_2_finish]):
+                indexWeight = metaData[l].find(weightString) + len(weightString)
+                oldWeight = int(metaData[l][indexWeight:])
+                newLine = metaData[l][:indexWeight] + str(oldWeight + increment) + '\n'
+                metaData[l] = newLine # Update the list storing the lines
+                break # exit the for loop after the correct position index has been found
+                
+    # Write the lines back to the text file
+    with open(fileDir, 'w') as fileObj:
+        fileObj.writelines(metaData)
+
+def readAverageMetaDataWeight(fileDir, pi, fi):
+    # function runs on the average metadata too
+    with open(fileDir, 'r') as f:
+        metaData = f.readlines()
+
+    idString_1_start = f'pi = '
+    idString_1_finish = f', dsPos'
+    idString_2_start = f'fi = '
+    idString_2_finish = f', fluence'
+    weightString = f'weight = '
+    for l in range(len(metaData)):
+        if weightString in metaData[l]:
+            index_1_start = metaData[l].find(idString_1_start) + len(idString_1_start)
+            index_1_finish = metaData[l].find(idString_1_finish)
+            index_2_start = metaData[l].find(idString_2_start) + len(idString_2_start)
+            index_2_finish = metaData[l].find(idString_2_finish)
+            if pi == int(metaData[l][index_1_start:index_1_finish]) and fi == int(metaData[l][index_2_start:index_2_finish]):
                 indexWeight = metaData[l].find(weightString) + len(weightString)
                 weight = int(metaData[l][indexWeight:])
                 return weight
@@ -210,8 +266,11 @@ def findtzpos(xdata, ydata):
     plt.scatter(xdata, yrmserr_filtered, c = 'red')
     plt.show()
 
-    
-                                    
+def malusFunc(x,A,phi,offset,invert=True):
+    if invert == False:
+        return A*(np.cos(np.pi/180*(x-phi)))**2 + offset
+    else:
+        return phi + 180/np.pi * np.arccos(np.sqrt((x-offset)/A))
 
 class RoiRectangle():
     def __init__(self,cx,cy,w,h,ax):
@@ -267,6 +326,10 @@ class SetupApp():
                 if line[:line.find(":")] != '#':
                     persistent_settings_dict[line[:line.find(":")]] = line[line.find(":")+1:].replace('\n','')
         
+        # Define the pump malus curve
+        self.imalus = lambda x: malusFunc(x, float(persistent_settings_dict['pump_malus_A']), float(persistent_settings_dict['pump_malus_phi']), float(persistent_settings_dict['pump_malus_offset']),invert=True)
+        self.malus = lambda x: malusFunc(x, float(persistent_settings_dict['pump_malus_A']), float(persistent_settings_dict['pump_malus_phi']), float(persistent_settings_dict['pump_malus_offset']),invert=False)
+        
         # Setup the tkinter GUI window
         self.root = tk.Tk()
         self.root.geometry("1000x700")
@@ -291,8 +354,8 @@ class SetupApp():
         self.h, self.w = self.camImage.shape
 
         # Configure some aspects of the plot window
-        gs = gridspec.GridSpec(2, 2,width_ratios=[self.w,self.w*.1], height_ratios=[self.h,self.h*.1])
-        self.camFig = plt.figure()
+        gs = gridspec.GridSpec(2, 2, width_ratios=[self.w,self.w*.1], height_ratios=[self.h,self.h*.1])
+        self.camFig = plt.figure(figsize=(5,6))
         self.camAx = [plt.subplot(gs[0]),]
         self.camAx.append(plt.subplot(gs[1],sharey=self.camAx[0]))
         self.camAx.append(plt.subplot(gs[2],sharex=self.camAx[0]))
@@ -304,6 +367,9 @@ class SetupApp():
         # Connect to the delay stage
         self.ds = lab_instruments.DelayStage()
         
+        # Connect to the half wave plate
+        self.hwp = lab_instruments.HalfWavePlate()
+        
         # Data display settings and variables
         self.wait = wait
         self.ppw = 100
@@ -314,10 +380,10 @@ class SetupApp():
         padyControls = 1
         padySep = 1
         entryWidth = 10
-        largeEntryWidth = 20
-        sepWidth = 190
+        largeEntryWidth = 18
+        sepWidth = 150
         sepHeight = 1
-        buttonWidth = 18
+        buttonWidth = 16
         cntrlBg = '#2F8D35'
         
         # Create intensity history arrays for data plots
@@ -329,21 +395,24 @@ class SetupApp():
         self.timeHistory = []
         self.t0 = time.time()
         self.t1 = self.t0
-        
-        # Make a Tkinter frame for the data plots
-        self.dataFrame = tk.Frame(master=self.root, width=50, height=100, padx=5, pady=5)
-        self.dataFrame.pack(side=tk.RIGHT)
-        
-        # Make a Tkinter frame for the scan plots
-        self.scanFrame = tk.Frame(master=self.root, width=50, height=100, padx=5, pady=5, bg=cntrlBg)
-        self.scanFrame.pack(side=tk.RIGHT)
+
+        # Make a Tkinter frame for the detector
+        self.detectorFrame = tk.Frame(master=self.root, width=100, height=100, padx=5, pady=5, bg=cntrlBg)
+        self.detectorFrame.pack(side=tk.LEFT)
         
         # Make a Tkinter frame for the ROI selection buttons
-        self.controls = tk.Frame(master=self.root, width=50, height=100, padx=5, pady=5, bg=cntrlBg)
-        self.controls.pack(side=tk.RIGHT)
-
-        # This is the GUI controls section
+        self.controls = tk.Frame(master=self.root, width=100, height=100, padx=5, pady=5, bg=cntrlBg)
+        self.controls.pack(side=tk.LEFT)
         
+        # Make a Tkinter frame for the scan controls
+        self.scanFrame = tk.Frame(master=self.root, width=100, height=100, padx=5, pady=5, bg=cntrlBg)
+        self.scanFrame.pack(side=tk.LEFT)
+        
+        # Make a Tkinter frame for the data plots
+        self.dataFrame = tk.Frame(master=self.root, width=100, height=100, padx=5, pady=5)
+        self.dataFrame.pack(side=tk.LEFT)
+                
+        # This is the GUI controls section
         # Adding the ROI controls
         self.roiSelection = tk.StringVar(self.controls)
         self.roiSelection.set("roi rectangle") # default value
@@ -405,7 +474,7 @@ class SetupApp():
         self.saveImageButton = tk.Button(
             master=self.controls,
             text="Save Cam Image",
-            width=18,
+            width=buttonWidth,
             height=1,
             fg='black', bg='white',
             command=self.saveImage)
@@ -439,52 +508,61 @@ class SetupApp():
                 self.gain_label_string.set(f'Gain = {self.gain} dB')
                 self.exposure_label_string.set(f'Exposure = {self.exposure} s')
                 self.camSettingsUpdateInProgress = True
-            
-        self.camSettingsButton = tk.Button(
-            master=self.controls,
-            text="Update Cam Settings",
-            width=buttonWidth,
-            height=1,
-            fg='black', bg='white',
-            command=camSettingsButtonFunc)
-        
+                    
         # Adding the ds controls
         self.currentDsPos_label_string = tk.StringVar()
-        self.currentDsPos_label_string.set(f'Current dsPos = {self.ds.getPos()}')
+        self.currentDsPos_label_string.set(f'Current dsPos = {self.ds.getPos()} mm')
         self.currentDsPos_label = tk.Label(master=self.controls,textvariable=self.currentDsPos_label_string,bg=cntrlBg)
+        
         dsPos1_label = tk.Label(master=self.controls,text="dsPos1 (mm)",bg=cntrlBg)
+        self.dsPos1Entry = tk.Entry(master=self.controls,width=entryWidth)
+        
+        dsPos2_label = tk.Label(master=self.controls,text="dsPos2 (mm)",bg=cntrlBg)
+        self.dsPos2Entry = tk.Entry(master=self.controls,width=entryWidth)
         
         def dsPos1ButtonFunc():
             dsPos = float(self.dsPos1Entry.get())
             self.ds.setPos(dsPos)
             self.currentDsPos_label_string.set(f'Current dsPos = {self.ds.getPos()}')
             
-        self.dsPos1Entry = tk.Entry(master=self.controls,width=entryWidth)
-        self.dsPos1Button = tk.Button(
-            master=self.controls,
-            text="Move dsPos1",
-            width=buttonWidth,
-            height=1,
-            fg='black', bg='white',
-            command=dsPos1ButtonFunc)
-        dsPos2_label = tk.Label(master=self.controls,text="dsPos2 (mm)",bg=cntrlBg)
-        
         def dsPos2ButtonFunc():
             dsPos = float(self.dsPos2Entry.get())
             self.ds.setPos(dsPos)
             self.currentDsPos_label_string.set(f'Current dsPos = {self.ds.getPos()}')
-            
-        self.dsPos2Entry = tk.Entry(master=self.controls,width=entryWidth)
-        self.dsPos2Button = tk.Button(
-            master=self.controls,
-            text="Move dsPos2",
-            width=buttonWidth,
-            height=1,
-            fg='black', bg='white',
-            command=dsPos2ButtonFunc)
-            
-        # Adding the data plot controls
         
+
+        # Adding the hwp pump controls
+        self.currentFluence_label_string = tk.StringVar()
+        currentHwpAngle = self.hwp.getPos()
+        cfs = '%.2f' % self.malus(currentHwpAngle)
+        self.currentFluence_label_string.set(f'Current Fluence = {cfs} Ko')
+        self.currentFluence_label = tk.Label(master=self.controls,textvariable=self.currentFluence_label_string,bg=cntrlBg)
+        
+        self.currentHwpPos_label_string = tk.StringVar()
+        chs = '%.2f' % currentHwpAngle
+        self.currentHwpPos_label_string.set(f'Current HwpPos = {chs} deg')
+        self.currentHwpPos_label = tk.Label(master=self.controls,textvariable=self.currentHwpPos_label_string,bg=cntrlBg)
+        
+        fluence1_label = tk.Label(master=self.controls,text="Fluence (Ko)",bg=cntrlBg)
+        self.fluence1Entry = tk.Entry(master=self.controls,width=entryWidth)
+        
+        def fluence1ButtonFunc():
+            fluence = float(self.fluence1Entry.get())
+            hwp_angle = self.imalus(fluence)
+            
+            # Check to make sure this command makes sense
+            if hwp_angle > 0 and fluence > 0 and fluence < 7:
+                # Move the hwp to the new fluence
+                self.hwp.moveAbsolute(hwp_angle)
+                time.sleep(0.25)
+                currentHwpAngle = self.hwp.getPos()
+                cfs = '%.2f' % self.malus(currentHwpAngle)
+                chs = '%.2f' % currentHwpAngle
+                self.currentFluence_label_string.set(f'Current Fluence = {cfs} Ko')
+                self.currentHwpPos_label_string.set(f'Current HwpPos = {chs} deg')
+
+
+        # Adding the data plot controls
         def newPointButtonFunc():
             if self.resetHistory == False:
                 self.resetHistory = True
@@ -551,21 +629,26 @@ class SetupApp():
         self.scanSweepSelection = tk.StringVar(self.controls)
         self.scanSweepSelection.set("quasi random") # default value
         scanSweepSelection_button = tk.OptionMenu(self.scanFrame, self.scanSweepSelection, "one direction", "back and forth", "quasi random", 'full random')
-        scanDsPos_label = tk.Label(master=self.scanFrame,text="dsPos Scan List: (start,end,step)",bg=cntrlBg)
+        scanDsPos_label = tk.Label(master=self.scanFrame,text="dsPos Scan List (mm):\n(start,end,step)",bg=cntrlBg)
         self.scanDsPosEntry = tk.Entry(master=self.scanFrame,width=largeEntryWidth)
         self.scanDsPosEntry.insert(-1,persistent_settings_dict['dsPositions'])
-        tzpos_label = tk.Label(master=self.scanFrame,text="time zero position (mm)",bg=cntrlBg)
-        self.tzposEntry = tk.Entry(master=self.scanFrame,width=largeEntryWidth)
-        self.tzposEntry.insert(-1,persistent_settings_dict['tzpos'])
+
+        scanFluence_label = tk.Label(master=self.scanFrame,text="Fluence Scan List (Ko):\n(start,end,step)",bg=cntrlBg)
+        self.scanFluenceEntry = tk.Entry(master=self.scanFrame,width=largeEntryWidth)
+        self.scanFluenceEntry.insert(-1,persistent_settings_dict['fluences'])
+        scanHwpWait_label = tk.Label(master=self.scanFrame,text="HWP Wait (s)",bg=cntrlBg)
+        self.scanHwpWaitEntry = tk.Entry(master=self.scanFrame,width=largeEntryWidth)
+        self.scanHwpWaitEntry.insert(-1,10)
+        
         scanBatchSize_label = tk.Label(master=self.scanFrame,text="Batch Size",bg=cntrlBg)
         self.batchSizeEntry = tk.Entry(master=self.scanFrame,width=largeEntryWidth)
         self.batchSizeEntry.insert(-1,1)
         scanDirLoc_label = tk.Label(master=self.scanFrame,text="Scan Directory",bg=cntrlBg)
         self.scanDirLocEntry = tk.Entry(master=self.scanFrame,width=largeEntryWidth)
         self.varTransCorr = tk.IntVar()
-        self.transCorrBox = tk.Checkbutton(master=self.scanFrame, text='Translation Correction',variable=self.varTransCorr, onvalue=1, offvalue=0,bg=cntrlBg)
+        self.transCorrBox = tk.Checkbutton(master=self.scanFrame, text='Translation\nCorrection',variable=self.varTransCorr, onvalue=1, offvalue=0,bg=cntrlBg)
         self.varScanMedianFilter = tk.IntVar()
-        self.scanMedianFilterBox = tk.Checkbutton(master=self.scanFrame, text='Median Filter for Scan',variable=self.varScanMedianFilter, onvalue=1, offvalue=0,bg=cntrlBg)        
+        self.scanMedianFilterBox = tk.Checkbutton(master=self.scanFrame, text='Median Filter\nDuring Scan',variable=self.varScanMedianFilter, onvalue=1, offvalue=0,bg=cntrlBg)        
         self.varSmartScan = tk.IntVar()
         self.smartScanBox = tk.Checkbutton(master=self.scanFrame, text='Smart Scan ®',variable=self.varSmartScan, onvalue=1, offvalue=0,bg=cntrlBg)
         
@@ -589,7 +672,7 @@ class SetupApp():
             command=startScan)
         
         # Add a image progress bar
-        self.imProgBar = ttk.Progressbar(master=self.controls,length=160)
+        self.imProgBar = ttk.Progressbar(master=self.controls,length=140)
         
         # Image set and averaging controls
         self.numAvgDis = 0
@@ -624,28 +707,28 @@ class SetupApp():
             command=imageSetButtonFunc)
         
         # Pack controls
-        scanSweepSelection_label.pack()
-        scanSweepSelection_button.pack(pady=padyControls)
         add_roi_button.pack(pady=padyControls)
         self.saveRoisButton.pack(pady=padyControls)
         self.loadRoisButton.pack(pady=padyControls)
         self.clearRoisButton.pack(pady=padyControls)
         tk.Frame(master=self.controls, bd=100, relief='flat',height=sepHeight,width=sepWidth,bg='black').pack(side='top', pady=padySep)
-        self.saveImageButton.pack(pady=padyControls)
         self.gain_label.pack(pady=padyControls)
         self.gainEntry.pack(pady=padyControls)
         self.exposure_label.pack(pady=padyControls)
         self.exposureEntry.pack(pady=padyControls)
-        self.camSettingsButton.pack(pady=padyControls)
+        self.saveImageButton.pack(pady=padyControls)
         self.imProgBar.pack(pady=padyControls)
         tk.Frame(master=self.controls, bd=100, relief='flat',height=sepHeight,width=sepWidth,bg='black').pack(side='top', pady=padySep)
         self.currentDsPos_label.pack()
         dsPos1_label.pack(pady=padyControls)
         self.dsPos1Entry.pack(pady=padyControls)
-        self.dsPos1Button.pack(pady=padyControls)
         dsPos2_label.pack(pady=padyControls)
         self.dsPos2Entry.pack(pady=padyControls)
-        self.dsPos2Button.pack(pady=padyControls)
+        tk.Frame(master=self.controls, bd=100, relief='flat',height=sepHeight,width=sepWidth,bg='black').pack(side='top', pady=padySep)
+        self.currentFluence_label.pack(pady=padyControls)
+        self.currentHwpPos_label.pack(pady=padyControls)
+        fluence1_label.pack(pady=padyControls)
+        self.fluence1Entry.pack(pady=padyControls)
         tk.Frame(master=self.controls, bd=100, relief='flat',height=sepHeight,width=sepWidth,bg='black').pack(side='top', pady=padySep)
         self.newPointButton.pack(pady=padyControls)
         self.clearDataButton.pack(pady=padyControls)
@@ -657,10 +740,15 @@ class SetupApp():
         self.imageSetButton.pack(pady=padyControls)
         # ~ tk.Frame(master=self.controls, bd=100, relief='flat',height=sepHeight,width=sepWidth,bg='black').pack(side='top', pady=padySep)
         
+        
+        scanSweepSelection_label.pack()
+        scanSweepSelection_button.pack(pady=padyControls)
         scanDsPos_label.pack(pady=padyControls)
         self.scanDsPosEntry.pack(pady=padyControls)
-        tzpos_label.pack(pady=padyControls)
-        self.tzposEntry.pack(pady=padyControls)
+        scanFluence_label.pack(pady=padyControls)
+        self.scanFluenceEntry.pack(pady=padyControls)
+        scanHwpWait_label.pack(pady=padyControls)
+        self.scanHwpWaitEntry.pack(pady=padyControls)
         scanBatchSize_label.pack(pady=padyControls)
         self.batchSizeEntry.pack(pady=padyControls)
         scanDirLoc_label.pack(pady=padyControls)
@@ -678,6 +766,8 @@ class SetupApp():
                 dsPos1ButtonFunc()
             if entry == self.dsPos2Entry:
                 dsPos2ButtonFunc()
+            if entry == self.fluence1Entry:
+                fluence1ButtonFunc()
 
         # Bind the enter key to activate selected entry
         self.root.bind('<Return>', userPressReturn)
@@ -735,20 +825,28 @@ class SetupApp():
         self.camFig.canvas.mpl_connect('motion_notify_event', self.camonmove)
 
         # Attach the matplotlib image figures to a tkinter gui window
-        self.canvas = FigureCanvasTkAgg(self.camFig, master=self.root)
+        self.canvas = FigureCanvasTkAgg(self.camFig, master=self.detectorFrame)
         # ~ self.toolbar = NavigationToolbar2Tk(self.canvas, self.root)
         # ~ self.toolbar.update()
-        self.canvas._tkcanvas.pack(side=tk.RIGHT, fill=tk.BOTH, expand=1)
+        self.canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
         self.label = tk.Label(text="")
         self.label.pack()
         
         # Create the data plot
-        self.dataFig, self.dataAx = plt.subplots(2,1,figsize=(5, 7))
+        self.dataFig, self.dataAx = plt.subplots(3,1,figsize=(4, 6))
+        self.dataFig.subplots_adjust(left=0.2, hspace=0.4)
         self.liveIntensityPlot, = self.dataAx[0].plot([],[],'go-') # live intensity plot
         self.dataAx[0].set_xlabel('Time (s)')
         self.avgIntensityPlot = self.dataAx[1].errorbar(range(len(self.avgIntensity)),self.avgIntensity,self.stdIntensity,\
                                                         marker='o',color='green',elinewidth=1,capsize=5) # average intensiity plot with error bars at 1 sigma
         self.dataAx[1].set_xlabel('Data Point #')
+        
+        # Get the virtual sample camera
+        self.hayearCam = lab_instruments.HayearCamera()
+        
+        self.hayearCamImageObj = self.dataAx[2].imshow(self.hayearCam.grabImage())
+        self.dataAx[2].set_xticks([])
+        self.dataAx[2].set_yticks([])
         
         # Attach the matplotlib data figures to a tkinter gui window
         self.datacanvas = FigureCanvasTkAgg(self.dataFig, master=self.dataFrame)
@@ -797,6 +895,8 @@ class SetupApp():
                             'gain':str(self.gainEntry.get()),\
                             'exposure':str(self.exposureEntry.get()),\
                             'dsPositions':str(self.scanDsPosEntry.get()),\
+                            'fluences':str(self.scanFluenceEntry.get()),\
+                            'hwp wait':str(self.scanHwpWaitEntry.get()),\
                             'batchSize':str(self.batchSizeEntry.get()),\
                             'translationCorrection':str(self.varTransCorr.get()),\
                             'smartScan':str(self.varSmartScan.get()),\
@@ -808,28 +908,36 @@ class SetupApp():
                     
             # Update the persistent settings file
             psParamsDict = { \
-                'tzpos':str(self.tzposEntry.get()),\
-                'dsPositions':str(self.scanDsPosEntry.get())}
+                'tzpos':persistent_settings_dict['tzpos'],\
+                'dsPositions':str(self.scanDsPosEntry.get()),\
+                'fluences':str(self.scanFluenceEntry.get()),\
+                'pump_malus_A':persistent_settings_dict['pump_malus_A'],\
+                'pump_malus_phi':persistent_settings_dict['pump_malus_phi'],\
+                'pump_malus_offset':persistent_settings_dict['pump_malus_offset']}
+                                
             with open(f'persistent_settings.txt','w') as psf:
                 for key, value in psParamsDict.items():
                     psf.write('%s:%s\n' % (key, value))
                     
             dsPositions = parsePosStr(str(self.scanDsPosEntry.get()))
+            fluences = parsePosStr(str(self.scanFluenceEntry.get()))
+            hwpWait = float(self.scanHwpWaitEntry.get())
             batchSize = int(self.batchSizeEntry.get())
             tcq = bool(self.varTransCorr.get())
             smfq = bool(self.varScanMedianFilter.get())
             ssq = bool(self.varSmartScan.get())
-            tzpos = float(self.tzposEntry.get())
+            tzpos = float(persistent_settings_dict['tzpos'])
             
             self.root.destroy() # Totally destroy the setup gui so we can move into the scan gui
             
-            scanapp = ScanApp(camera=self.camera,ds=self.ds,dsPositions=dsPositions,batchSize=batchSize, \
+            scanapp = ScanApp(camera=self.camera,ds=self.ds,hwp=self.hwp,dsPositions=dsPositions,fluences=fluences,hwpWait=hwpWait,imalus=self.imalus,batchSize=batchSize,\
                               translationCorrectionQ=tcq, scanMedianFilterQ=smfq, smartScanQ=ssq, scanDir=scanDir, tzpos=tzpos, rm=self.rm, scansweepselection = scansweepselection)
         else:
             print('Disconnecting camera and delay stage')
             self.ds.disconnect() # disconnect from delay stage
             #  Ending acquisition appropriately helps ensure that devices clean up
             #  properly and do not need to be power-cycled to maintain integrity.
+            self.hayearCam.disconnect()
             self.camera.setExposure(1) # Reset exposure to 1.0 s and disconnect from the camera.
             self.camera.disconnect() # disconnect from camera
       
@@ -1062,8 +1170,11 @@ class SetupApp():
                 self.dataAx[0].set_title(f"N = {len(self.intensityHistory)}")
                 self.liveIntensityPlot.set_xdata(self.timeHistory)
                 self.liveIntensityPlot.set_ydata(self.intensityHistory)
-                    
+                
                 update_errorbar(self.avgIntensityPlot,range(len(self.avgIntensity)),self.avgIntensity,yerr=self.stdIntensity)
+                
+                # Get an image of the virtual sample
+                self.hayearCamImageObj.set_data(self.hayearCam.grabImage())
                 
                 # Update the figures
                 self.canvas.draw()
@@ -1092,7 +1203,7 @@ class SetupApp():
             thrImage.join()
 
         self.root.quit() # Close the prep GUI window when the scan is started
-
+    
     def imageAcquire(self):
         # Sends the software trigger
         self.camera.trigger()
@@ -1109,14 +1220,18 @@ class SetupApp():
         # Grabs the image
         self.camImage = self.camera.grabImage()
         self.processPrev = True # Tell the data acquisition loop that there is an image that needs processing
-        
+       
 class ScanApp():
-    def __init__(self, camera, ds, dsPositions, batchSize, translationCorrectionQ, scanMedianFilterQ, smartScanQ, scanDir, tzpos, rm, scansweepselection, dsWait = 0.1, wait = .033):
+    def __init__(self, camera, ds, hwp, dsPositions, fluences, hwpWait, imalus, batchSize, translationCorrectionQ, scanMedianFilterQ, smartScanQ, scanDir, tzpos, rm, scansweepselection, dsWait = 0.1, wait = .033):
         self.camera=camera
         self.ds=ds
+        self.hwp=hwp
         self.exposure=self.camera.getExposure()
         self.gain=self.camera.getGain()
         self.dsPositions=dsPositions
+        self.fluences=fluences
+        self.hwpWait=hwpWait
+        self.imalus=imalus
         self.batchSize=batchSize
         self.translationCorrectionQ=translationCorrectionQ
         self.scanMedianFilterQ = scanMedianFilterQ
@@ -1130,6 +1245,8 @@ class ScanApp():
         now = datetime.datetime.now()
         self.runLog = f'scan app started at {now.strftime("%Y_%m_%d-%H_%M_%S")} \n'
         self.runLogFileName = f'runLog_{now.strftime("%Y_%m_%d-%H_%M_%S")}.txt'
+        
+        print('imalus test',self.imalus(3))
         
         # Some general formatting vars
         padyControls = 2
@@ -1343,7 +1460,7 @@ class ScanApp():
         self.label.pack()
         
         # Create the data plot
-        self.dataFig, self.dataAx = plt.subplots(2,1,figsize=(5, 7))
+        self.dataFig, self.dataAx = plt.subplots(2,1)
         self.intensityLabTimePlot, = self.dataAx[0].plot([],[],'go-') # live intensity plot
         self.dataAx[0].set_xlabel('Scan #')
         self.intensityScanTimePlot = self.dataAx[1].errorbar(self.dsPositions,self.intensityScanTime,self.stdIntensityScanTime,\
@@ -1383,16 +1500,18 @@ class ScanApp():
         
         # Create the files for the total average
         for p in range(len(self.dsPositions)):
-            dsPos = self.dsPositions[p] # direction doesn't matter here; we just need the positions for the files names
-            dsPosString = '%.4f' % dsPos
-            tifffile.imwrite(f'{self.scanDir}//average//pos={dsPosString}.tiff',self.zeroImage)
+            for f in range(len(self.fluences)):
+                dsPos = self.dsPositions[p] # direction doesn't matter here; we just need the positions for the files names
+                flu = self.fluences[f]
+                dsPosString = '%.4f' % dsPos
+                fluString = '%.4f' % flu
+                tifffile.imwrite(f'{self.scanDir}//average//pos={dsPosString}_flu={fluString}.tiff',self.zeroImage)
 
         thrBatchAverage = None # Variable that contains the moving batch average thread
         
         # Create the index variables
         b = -1
         s = -1
-        pi = -1
         
         # Make a string that records the formattted start time
         self.t_startString = datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
@@ -1402,17 +1521,31 @@ class ScanApp():
         t_lastImage = self.t_start # This variable will later be used to record when images finish
         
         # Create a meta data file for the total average folder, write a row for each delay stage position
-        with open(f'{self.scanDir}//average//averageMetaData.txt', 'w') as f:
+        with open(f'{self.scanDir}//average//averageMetaData.txt', 'w') as fileObj:
             for p in range(len(self.dsPositions)):
-                f.write(f'pi = {p}, dsPos = {self.dsPositions[p]} mm, weight = 0 \n')
+                for f in range(len(self.fluences)):
+                    fileObj.write(f'pi = {p}, dsPos = {self.dsPositions[p]} mm, fi = {f}, fluence = {self.fluences[f]} Ko, weight = 0 \n')
+        
+        # Double array makes back and forth motion automatic
+        self.fluence_double_array = np.append(self.fluences,self.fluences[::-1])
         
         ### Start the experiment loop ###
         while self.scanLive:
             b += 1 # Record that a new batch is being taken, note that b is initiated at a value of -1
             self.batchNumber_label_string.set(f"batch # = {b}") # Write the current batch number to the gui
             
+            # Update the fluence
+            flu = self.fluence_double_array[b%len(self.fluence_double_array)] # get the new fluence from the doubled over fluence array, it's doubled so that motion is back and forth
+            hwpPos = self.imalus(flu)
+            print(f'moving to hwpPow = {hwpPos}, fluence = {flu}, batch # = {b}')
+            self.hwp.moveAbsolute(hwpPos) # Sends command to the HWP
+            time.sleep(self.hwpWait) # Wait for hwpWait many seconds
+            readHwpPos = self.hwp.getPos() # Read the half wave plate value back to compare to the send value
+            
             # Log batch start time
             self.runLog += f'batch {b} started at {datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")} \n'
+            # Log current set fluence and the read hwp pos
+            self.runLog += f'set fluence = {flu} Ko, set hwpPos = {hwpPos} deg, read hwpPos = {readHwpPos} deg\n'
             
             # Create a directory for the new batch files
             os.makedirs(f'{self.scanDir}//batch{b}')
@@ -1422,6 +1555,9 @@ class ScanApp():
                 f.write(f'Experiment start time  = {self.t_startString}\n')
                 f.write(f'batch {b} started at {datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")} \n')
                 f.write(f'batchSize = {self.batchSize}\n')
+                f.write(f'fluence = {flu} Ko\n')
+                f.write(f'set HWP Pos = {hwpPos} deg\n')
+                f.write(f'read HWP Pos = {readHwpPos} deg\n')
                 for p in range(len(self.dsPositions)):
                     f.write(f'pi = {p}, dsPos = {self.dsPositions[p]} mm, weight = 0 \n')
 
@@ -1606,7 +1742,12 @@ class ScanApp():
         tifffile.imwrite(f'{self.scanDir}//batch{b}//pos={dsPosString}.tiff',imAvg) # save the updated image
     
     def movingAverageBatch(self, b):
-        print(f'Computing moving average on batch {b}')
+        # Get the fluence of this batch using the back and forth formula (maybe make this more robust later SCAF)
+        flu = self.fluence_double_array[b%len(self.fluence_double_array)]
+        fluString = '%.4f' % flu
+        fi = np.where(np.array(self.fluences) == flu)[0][0] # Get the fluence index
+        print(f'Computing moving average on batch {b}, fluence {fluString} Ko, fi = {fi}')
+        
         for p in range(len(self.dsPositions)):
             print(f'moving batch average on position index {p}')
             dsPos = self.dsPositions[p]
@@ -1615,26 +1756,26 @@ class ScanApp():
             # Load the image from the b batch folder
             imNew = tifffile.imread(f'{self.scanDir}//batch{b}//pos={dsPosString}.tiff') # Load the image corresponding to this position and the latest batch
             # Load the image from the average folder
-            imAvg = tifffile.imread(f'{self.scanDir}//average//pos={dsPosString}.tiff') # Load the moving average image corresponding to this position
+            imAvg = tifffile.imread(f'{self.scanDir}//average//pos={dsPosString}_flu={fluString}.tiff') # Load the moving average image corresponding to this position and fluence
             # Get the weight of the new image
             wNew = readBatchMetaDataWeight(fileDir=f'{self.scanDir}//batch{b}//batchMetaData.txt', pi = p)
             # get the weight of the average image
-            wAvg = readBatchMetaDataWeight(fileDir=f'{self.scanDir}//average//averageMetaData.txt', pi = p)
+            wAvg = readAverageMetaDataWeight(fileDir=f'{self.scanDir}//average//averageMetaData.txt', pi = p, fi = fi)
             
             print('wNew, wAvg',wNew, wAvg) #SCAF
             # Compute the new average image
             imFinal = np.array((wNew*imNew + wAvg*imAvg)/(wNew + wAvg), dtype=self.image_dtype) # compute moving average
             
             # Upate the average image weight in the average metadata file
-            incrementBatchMetaDataWeight(fileDir=f'{self.scanDir}//average//averageMetaData.txt', pi = p, increment = wNew)
+            incrementAverageMetaDataWeight(fileDir=f'{self.scanDir}//average//averageMetaData.txt', pi = p, fi = fi, increment = wNew)
             
             # Save the updated image
-            tifffile.imwrite(f'{self.scanDir}//average//pos={dsPosString}.tiff', imFinal)
+            tifffile.imwrite(f'{self.scanDir}//average//pos={dsPosString}_flu={fluString}.tiff', imFinal)
             
         now = datetime.datetime.now()
         self.runLog += f'movingAverageBatch thread completed for b = {b} at {now.strftime("%Y_%m_%d-%H_%M_%S")} \n'
     
-    def computePiList(self, s, probability = 0.1):
+    def computePiList(self, s, probability = 0.25):
         pi_array_init = np.array(range(len(self.dsPositions)))
         
         if self.scansweepselection == 'one direction':
@@ -1789,22 +1930,5 @@ class ScanApp():
                     
 if __name__ == '__main__':
     app = SetupApp()
-    # ~ matplotlib.use('TkAgg')
-    # ~ xx = np.arange(68,75,0.01)
-    # ~ yy = func_erfexpdecay(xx, 70, 0.1, 0.1, 1)
-    
-    # ~ plt.axvline(x = 70, c = 'black')
-    
-    # ~ plt.plot(xx, yy)
-    # ~ plt.show()
-    
-    # ~ xdata = [60,61,62,63,64,65,66,67,68,69,70,70.1,70.2,70.3,70.4,70.5,71,72,73,74,75,76,77,78,79,80]
-    # ~ ydata = [0.997474988,0.99752136,1.000630073,0.999152705,1.001928638,1.001994577,0.997330719,0.992401051,0.991166878,0.98204996,0.97696682,0.970637158,0.973671426,0.973139571,0.979787679,0.978655288,0.984136825,0.984312836,0.987501369,0.981860713,0.984735285,]
-    # ~ #ydata = np.array([1,1,1,1,1,1,1,1,1,0.9999,0.999,0.995,0.993,0.99,0.98,0.975,0.97,0.972,0.975,0.98,0.983,0.984,0.985,0.985,0.985,0.985])
-    # ~ ydata = np.array([1,1,1,1,1,1,1,1,1,0.9999,0.999,0.995,0.993,0.99,0.98,0.975,0.97,0.97,0.97,0.97,0.97,0.97,0.97,0.97,0.97,0.97])
-    # ~ ydata += np.random.normal(0, 0.005, size = len(ydata))
-    
 
-    # ~ t0 = findtzpos(xdata, ydata)
-    # ~ print(t0)
-    
+               
