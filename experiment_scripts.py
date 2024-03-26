@@ -124,5 +124,97 @@ def fluenceScan(dsPosList, hwpPosList, exposure, gain, scanDir, dsWait = 0.5, hw
     # disconnect from hwp
     hwp.disconnect()
 
+def heaterlineScan(hwpPosList, exposure, gain, N_per_pos, scanDir, hwp_wait = 1):
+    # Initialize camera
+    camera = lab_instruments.Camera()
+    time.sleep(1)
+    camera.setExposure(exposure)
+    camera.setGain(gain)
+            
+    # Connect to the hwp
+    hwp = lab_instruments.HalfWavePlate(com = 'COM8')
+    
+    time.sleep(1)
+    
+    # take a sample image
+    camera.trigger()
+    camImage = camera.grabImage()
+    h, w = camImage.shape
+    image_dtype = np.float32
+    zeroImage = np.zeros(np.shape(camImage),dtype=image_dtype) # A zero image that can be used later
+    
+    print('Starting Fluence Scan')
+    print(f'scanDir = {scanDir}')
+    
+    # Record the metadata of the scan
+    nowString = datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
+    scanParamsDict = { \
+                    'scanStartTime':nowString,\
+                    'gain':str(gain),\
+                    'exposure':str(exposure),\
+                    'hwpPositions':str(hwpPosList),\
+                    'N_per_pos':str(N_per_pos),\
+                    'hwp_wait (s)':str(hwp_wait),\
+                    'directory':scanDir}
+                    
+    with open(f'{scanDir}//scanMetaData_{nowString}.txt','w') as smdf:
+        for key, value in scanParamsDict.items():
+            smdf.write('%s:%s\n' % (key, value))
+    
+    original_umask = os.umask(0)
+
+    #pi will be position index, fi will be fluence index, li will be loop index (loops at the same fluence)
+    L = -1 # This counts which loop we are on
+    
+    # Wait here for user to begin scan
+    print('________________________________')
+    beginCode = input('PRESS ENTER TO START FLUENCE SCAN \n')
+    
+
+    t_start = time.time()
+    
+    for hwp_i in range(len(hwpPosList)):
+        hwp_pos = hwpPosList[hwp_i]
+        print(f'hwp_i = {hwp_i}, hwp_pos = {hwp_pos}')
+        
+        # Move to the new hwp position
+        hwp.moveAbsolute(hwp_pos) # Sends command to the HWP
+        hwp.getPos()
+        time.sleep(hwp_wait) # Wait for hwp_wait many seconds
+        
+        image = np.zeros(np.shape(zeroImage), dtype = np.float32)
+        
+        for i in range(N_per_pos):   
+            print(f'\t image index = {i} out of {N_per_pos}, hwp.getPos() -> {hwp.getPos()}')         
+            # Sends the software trigger to the camera
+            camera.trigger()
+            
+            if i > 0:
+                # moving average from the previously taken image (doing it this way speeds things up because the camera is capturing while we are doing the math)
+                image = (new_image + (i-1)*image)/i 
+                
+            new_image = camera.grabImage()
+        
+        # moving average on the final image
+        image = (new_image + (N_per_pos-1)*image)/N_per_pos 
+        
+            
+        tifffile.imwrite(f'{scanDir}//hwp_i={hwp_i}.tiff',image)
+            
+    # Disconnect from devices    
+    #  Ending acquisition appropriately helps ensure that devices clean up
+    #  properly and do not need to be power-cycled to maintain integrity.
+    camera.setExposure(1) # Reset exposure to 1.0 s and disconnect from the camera.
+    camera.disconnect() # disconnect from camera
+    # disconnect from hwp
+    hwp.disconnect()
+    
+    
+    
+    
+    
 if __name__ == '__main__':
-    fluenceScan([61,62,63],[71,72,73],1,30,r'C:\Users\thoma\OneDrive\Documents\GitHub\smartScan\testDir')
+    # ~ fluenceScan([61,62,63],[71,72,73],1,30,r'C:\Users\thoma\OneDrive\Documents\GitHub\smartScan\testDir')
+    # ~ hwpPosList = np.linspace(52.43,97.43,200)
+    hwpPosList = np.linspace(65,97.43,50,endpoint=True)
+    heaterlineScan(hwpPosList = hwpPosList, exposure = 16, gain = 30, N_per_pos = 54, scanDir = r'C:\Users\Kogar\Documents\electron_beam_photos\scans\2024_3_25_heaterlineScan')

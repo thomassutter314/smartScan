@@ -50,7 +50,6 @@ import threading
 import tifffile
 import cv2
 
-
 import json
 import csv
 from itertools import zip_longest
@@ -268,9 +267,9 @@ def findtzpos(xdata, ydata):
 
 def malusFunc(x,A,phi,offset,invert=True):
     if invert == False:
-        return A*(np.cos(np.pi/180*(x-phi)))**2 + offset
+        return A*(np.cos(np.pi/180*(2*x-phi)))**2 + offset
     else:
-        return phi + 180/np.pi * np.arccos(np.sqrt((x-offset)/A))
+        return 0.5*(phi + 180/np.pi * np.arccos(np.sqrt((x-offset)/A)))
 
 class RoiRectangle():
     def __init__(self,cx,cy,w,h,ax):
@@ -355,7 +354,7 @@ class SetupApp():
 
         # Configure some aspects of the plot window
         gs = gridspec.GridSpec(2, 2, width_ratios=[self.w,self.w*.1], height_ratios=[self.h,self.h*.1])
-        self.camFig = plt.figure(figsize=(5,6))
+        self.camFig = plt.figure(figsize=(10,14))
         self.camAx = [plt.subplot(gs[0]),]
         self.camAx.append(plt.subplot(gs[1],sharey=self.camAx[0]))
         self.camAx.append(plt.subplot(gs[2],sharex=self.camAx[0]))
@@ -551,16 +550,14 @@ class SetupApp():
             hwp_angle = self.imalus(fluence)
             
             # Check to make sure this command makes sense
-            if hwp_angle > 0 and fluence > 0 and fluence < 7:
+            if hwp_angle > 0 and fluence > 0 and fluence < 11:
                 # Move the hwp to the new fluence
                 self.hwp.moveAbsolute(hwp_angle)
-                time.sleep(0.25)
                 currentHwpAngle = self.hwp.getPos()
                 cfs = '%.2f' % self.malus(currentHwpAngle)
                 chs = '%.2f' % currentHwpAngle
                 self.currentFluence_label_string.set(f'Current Fluence = {cfs} Ko')
                 self.currentHwpPos_label_string.set(f'Current HwpPos = {chs} deg')
-
 
         # Adding the data plot controls
         def newPointButtonFunc():
@@ -1065,7 +1062,12 @@ class SetupApp():
         self.processPrev = False
         newPointSwitch = False
         
-        while self.camLive == 1:                                    
+        while self.camLive == 1:
+            print('________________________________')
+            print(self.camera.getExposure(),self.camera.getGain())
+            print('temp',self.camera.cam.DeviceTemperature())
+            print('power supply current',self.camera.cam.PowerSupplyCurrent())
+            print('power supply voltage',self.camera.cam.PowerSupplyVoltage())
             # Make sure the image thread has concluded
             if (thrImage != None) and (thrImage.is_alive()):
                 thrImage.join()
@@ -1539,8 +1541,8 @@ class ScanApp():
             hwpPos = self.imalus(flu)
             print(f'moving to hwpPow = {hwpPos}, fluence = {flu}, batch # = {b}')
             self.hwp.moveAbsolute(hwpPos) # Sends command to the HWP
-            time.sleep(self.hwpWait) # Wait for hwpWait many seconds
             readHwpPos = self.hwp.getPos() # Read the half wave plate value back to compare to the send value
+            time.sleep(self.hwpWait) # Wait for hwpWait many seconds
             
             # Log batch start time
             self.runLog += f'batch {b} started at {datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")} \n'

@@ -2,7 +2,7 @@ import time
 import numpy as np
 import cv2
 
-TESTING = True
+TESTING = False
 
 if TESTING == False:
     import pyvisa
@@ -305,11 +305,11 @@ class Camera():
             return False
 
 class HalfWavePlate():
-    def __init__(self):
+    def __init__(self, com = 'COM10'):
         self.conv = 0.00251175 # Conversion factor between device output and degrees
         self.rm = pyvisa.ResourceManager()
         self.rm.list_resources()
-        self.rotationMount = self.rm.open_resource('COM10')
+        self.rotationMount = self.rm.open_resource(com)
         #COM 10 for pump
         self.rotationMount.read_termination = '\r\n'
         self.rotationMount.write_termination = '\r\n'
@@ -352,7 +352,7 @@ class HalfWavePlate():
 class HayearCamera():
     def __init__(self):
         # Use 0 for the default camera (usually built-in), or specify the camera's index if you have multiple cameras.
-        self.cap = cv2.VideoCapture(1)
+        self.cap = cv2.VideoCapture(0)
         
         # Check if the camera opened successfully.
         if not self.cap.isOpened():
@@ -453,7 +453,7 @@ class pseudoHayearCamera():
     def disconnect(self):
         print('disconnect psuedo hayear cam')
 
-
+HayearCamera = pseudoHayearCamera
 if TESTING == True:
     # In test mode we redefine these classes as test objects that don't connect to anything
     Camera = pseudoCamera
