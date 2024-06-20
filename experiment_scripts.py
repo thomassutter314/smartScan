@@ -216,5 +216,5 @@ def heaterlineScan(hwpPosList, exposure, gain, N_per_pos, scanDir, hwp_wait = 1)
 if __name__ == '__main__':
     # ~ fluenceScan([61,62,63],[71,72,73],1,30,r'C:\Users\thoma\OneDrive\Documents\GitHub\smartScan\testDir')
     # ~ hwpPosList = np.linspace(52.43,97.43,200)
-    hwpPosList = np.linspace(65,97.43,50,endpoint=True)
-    heaterlineScan(hwpPosList = hwpPosList, exposure = 16, gain = 30, N_per_pos = 54, scanDir = r'C:\Users\Kogar\Documents\electron_beam_photos\scans\2024_3_25_heaterlineScan')
+    hwpPosList = np.linspace(60,97.43,50,endpoint=True)
+    heaterlineScan(hwpPosList = hwpPosList, exposure = 16, gain = 30, N_per_pos = 54, scanDir = r'C:\Users\Kogar\Documents\electron_beam_photos\scans\2024_4_1_heaterlineScan')
