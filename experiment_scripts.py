@@ -209,10 +209,7 @@ def heaterlineScan(hwpPosList, exposure, gain, N_per_pos, scanDir, hwp_wait = 1)
     # disconnect from hwp
     hwp.disconnect()
     
-    
-    
-    
-    
+
 if __name__ == '__main__':
     # ~ fluenceScan([61,62,63],[71,72,73],1,30,r'C:\Users\thoma\OneDrive\Documents\GitHub\smartScan\testDir')
     # ~ hwpPosList = np.linspace(52.43,97.43,200)

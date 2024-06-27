@@ -2,7 +2,7 @@ import time
 import numpy as np
 import cv2
 
-TESTING = False
+TESTING = True
 
 if TESTING == False:
     import pyvisa
@@ -409,7 +409,26 @@ class pseudoCamera():
         # ~ return  np.array((self.counter%11)*1000*np.random.random([500,500]), dtype = 'uint16')
         # ~ return  np.array(9000*np.random.random([500,500]), dtype = 'uint16')
         # ~ return np.array(5000*(np.zeros([500,500]) + 1), dtype = 'uint16')
-        print(self.counter)
+        # ~ print(self.counter)
+        
+        x = np.arange(0,500,1)
+        y = np.arange(0,500,1)
+        X, Y = np.meshgrid(x, y)
+        Z = np.random.normal(loc = 1000, scale = 200, size = (500,500))
+        # ~ Z = 1000.*np.exp(-0.5*(((X - 100)/50)**2 + ((Y-600)/80)**2))
+        
+        Z += 3000.*np.exp(-0.5*(((X - 100)/50)**2 + ((Y-350)/30)**2))
+        Z += 3*np.abs(X - Y)
+        
+        Z[250,300] = 2**16-1
+        Z[250,250] = 2**15
+        Z[250,200] = 2**14
+        Z[250,150] = 2**13
+        Z[250,100] = 2**12
+        Z[250,50] = 2**11
+        
+        
+        return np.array(Z, dtype = 'uint16')
         
         if self.counter > 25:
             self.counter = 0
@@ -460,3 +479,5 @@ if TESTING == True:
     DelayStage = pseudoDelayStage
     HalfWavePlate = pseudoHalfWavePlate
     HayearCamera = pseudoHayearCamera
+
+

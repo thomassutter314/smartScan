@@ -1,9 +1,0 @@
-Experiment start time  = 2023_10_20-19_02_11
-batch 5 started at 2023_10_20-19_02_42 
-batchSize = 5
-fluence = 3.0 Ko
-set HWP Pos = 58.254595043130514 deg
-read HWP Pos = 58.254595043130514 deg
-pi = 0, dsPos = 10.0 mm, weight = 5
-pi = 1, dsPos = 20.0 mm, weight = 5
-pi = 2, dsPos = 30.0 mm, weight = 5

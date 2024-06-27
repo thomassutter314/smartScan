@@ -28,7 +28,7 @@ import matplotlib
 from matplotlib.backends.backend_tkagg import FigureCanvasTk, NavigationToolbar2Tk
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-import matplotlib.gridspec as gridspec
+# ~ import matplotlib.gridspec as gridspec
 import matplotlib.widgets
 # ~ import matplotlib.animation as animation
 # ~ from matplotlib.figure import Figure
@@ -59,6 +59,8 @@ import sys
 
 import translationcorr as tc
 import lab_instruments
+import data_analysis
+
 
 def parsePosStr(s):
     dsPositions = np.array([])
@@ -70,13 +72,13 @@ def parsePosStr(s):
         j2 = s[j1:].find(']')
         
         if i1 != 0 and (i1 < j1 or j1 == 0):
-            print(s)
-            print(s[i1:i1+i2].split(','))
+            # ~ print(s)
+            # ~ print(s[i1:i1+i2].split(','))
             start, stop, step = list(map(float,s[i1:i1+i2].split(',')))
             newPosArr = np.arange(start,stop+step,step)
             dsPositions = np.append(dsPositions,newPosArr)
             s = s[i1+i2+1:]
-            print(s)
+            # ~ print(s)
         if j1 != 0 and (j1 < i1 or i1 == 0):
             newPosArr = list(map(float,s[j1:j1+j2].split(',')))
             dsPositions = np.append(dsPositions,newPosArr)
@@ -85,9 +87,7 @@ def parsePosStr(s):
     dsPositions.sort()
     dsPositions_unique = np.unique(dsPositions.round(4)) # rounds the values to 4 decimal places and removes duplicate positions
     
-    
-    print(dsPositions)
-    return dsPositions
+    return dsPositions_unique
         
 def popupmsg(msg):
     popup = tk.Tk()
@@ -239,37 +239,6 @@ def readAverageMetaDataWeight(fileDir, pi, fi):
                 weight = int(metaData[l][indexWeight:])
                 return weight
 
-def func_erfexpdecay(x, x0, sigma, A, gamma):
-    # ~ decay = np.ones(len(x))
-    # ~ mask = x < x0
-    # ~ decay[mask] = np.exp(gamma*(x[mask]-x0))
-    decay = 0.5*(1 + np.tanh(gamma*x))
-    return 1 - A/2*(1+scipy.special.erf((x0-x)/(np.sqrt(2)*sigma))) * decay
-    # ~ popt, pcov = opt.curve_fit(func, xdata, ydata, p0 = guess)
-    # ~ return popt
-                               
-def findtzpos(xdata, ydata):
-    matplotlib.use('TkAgg')
-    yrmserr = []
-    ydata = (ydata - min(ydata))/(max(ydata)-min(ydata)) # Normalize and scale data
-    
-    plt.scatter(xdata,ydata)
-    plt.figure()
-    
-    for i in range(len(ydata)):
-        yrmserr.append(np.sqrt(np.mean((ydata[:i+1] - 1)**2)))
-    
-    yrmserr_filtered = scipy.signal.medfilt(yrmserr, kernel_size=3)
-    
-    plt.scatter(xdata, yrmserr, c = 'blue')
-    plt.scatter(xdata, yrmserr_filtered, c = 'red')
-    plt.show()
-
-def malusFunc(x,A,phi,offset,invert=True):
-    if invert == False:
-        return A*(np.cos(np.pi/180*(2*x-phi)))**2 + offset
-    else:
-        return 0.5*(phi + 180/np.pi * np.arccos(np.sqrt((x-offset)/A)))
 
 class RoiRectangle():
     def __init__(self,cx,cy,w,h,ax):
@@ -326,8 +295,8 @@ class SetupApp():
                     persistent_settings_dict[line[:line.find(":")]] = line[line.find(":")+1:].replace('\n','')
         
         # Define the pump malus curve
-        self.imalus = lambda x: malusFunc(x, float(persistent_settings_dict['pump_malus_A']), float(persistent_settings_dict['pump_malus_phi']), float(persistent_settings_dict['pump_malus_offset']),invert=True)
-        self.malus = lambda x: malusFunc(x, float(persistent_settings_dict['pump_malus_A']), float(persistent_settings_dict['pump_malus_phi']), float(persistent_settings_dict['pump_malus_offset']),invert=False)
+        self.imalus = lambda x: data_analysis.malusFunc(x, float(persistent_settings_dict['pump_malus_A']), float(persistent_settings_dict['pump_malus_phi']), float(persistent_settings_dict['pump_malus_offset']),invert=True)
+        self.malus = lambda x: data_analysis.malusFunc(x, float(persistent_settings_dict['pump_malus_A']), float(persistent_settings_dict['pump_malus_phi']), float(persistent_settings_dict['pump_malus_offset']),invert=False)
         
         # Setup the tkinter GUI window
         self.root = tk.Tk()
@@ -351,15 +320,13 @@ class SetupApp():
         self.camImage = self.camera.grabImage()
         self.displayImage = self.camImage # This can be different than the direct cam image if filters or averaging is applied.
         self.h, self.w = self.camImage.shape
+        
+        self.camFig = plt.figure()
+        self.camFig = plt.figure(figsize=(5,8))
+        self.camAx = [self.camFig.add_gridspec(top=0.75, right=0.9, hspace = 0).subplots()]
 
-        # Configure some aspects of the plot window
-        gs = gridspec.GridSpec(2, 2, width_ratios=[self.w,self.w*.1], height_ratios=[self.h,self.h*.1])
-        self.camFig = plt.figure(figsize=(10,14))
-        self.camAx = [plt.subplot(gs[0]),]
-        self.camAx.append(plt.subplot(gs[1],sharey=self.camAx[0]))
-        self.camAx.append(plt.subplot(gs[2],sharex=self.camAx[0]))
-        self.camAx[0].xaxis.set_tick_params(labelbottom=False)
-        self.camAx[0].yaxis.set_tick_params(labelleft=False)
+        self.camAx.append(self.camAx[0].inset_axes([0, 1.05, 1, 0.25], sharex=self.camAx[0]))
+
         self.camAx[0].set_xticks([])
         self.camAx[0].set_yticks([])
         
@@ -394,21 +361,25 @@ class SetupApp():
         self.timeHistory = []
         self.t0 = time.time()
         self.t1 = self.t0
+        
+        # global variables for mouse location
+        self.mouse_x = 0
+        self.mouse_y = 0
 
         # Make a Tkinter frame for the detector
-        self.detectorFrame = tk.Frame(master=self.root, width=100, height=100, padx=5, pady=5, bg=cntrlBg)
+        self.detectorFrame = tk.Frame(master=self.root, width=0, height=0, padx=0, pady=0, bg=cntrlBg)
         self.detectorFrame.pack(side=tk.LEFT)
         
         # Make a Tkinter frame for the ROI selection buttons
-        self.controls = tk.Frame(master=self.root, width=100, height=100, padx=5, pady=5, bg=cntrlBg)
+        self.controls = tk.Frame(master=self.root, width=0, height=0, padx=0, pady=0, bg=cntrlBg)
         self.controls.pack(side=tk.LEFT)
         
         # Make a Tkinter frame for the scan controls
-        self.scanFrame = tk.Frame(master=self.root, width=100, height=100, padx=5, pady=5, bg=cntrlBg)
+        self.scanFrame = tk.Frame(master=self.root, width=0, height=0, padx=0, pady=0, bg=cntrlBg)
         self.scanFrame.pack(side=tk.LEFT)
         
         # Make a Tkinter frame for the data plots
-        self.dataFrame = tk.Frame(master=self.root, width=100, height=100, padx=5, pady=5)
+        self.dataFrame = tk.Frame(master=self.root, width=0, height=0, padx=0, pady=0)
         self.dataFrame.pack(side=tk.LEFT)
                 
         # This is the GUI controls section
@@ -416,59 +387,21 @@ class SetupApp():
         self.roiSelection = tk.StringVar(self.controls)
         self.roiSelection.set("roi rectangle") # default value
         add_roi_button = tk.OptionMenu(self.controls, self.roiSelection, "line profile", "roi rectangle")
-        def saveRoisButtonFunc():
-            defaultFileName = 'rois.txt'
-            fileLoc = tk.filedialog.asksaveasfile(mode='w',initialfile=defaultFileName,defaultextension=".*",filetypes = [("text files", ".txt")])
-            roiDict = {}
-            roiDict['#'] = ['cx','cy','w','h']
-            for i in range(len(self.rm)):
-                roiDict[i] = [self.rm[i].cx,self.rm[i].cy,self.rm[i].w,self.rm[i].h]
-            with open(fileLoc.name,'w') as rf:
-                for key, value in roiDict.items():
-                    rf.write('%s:%s\n' % (key, value))
-            print('Saved ROIS')
-        self.saveRoisButton = tk.Button(
-            master=self.controls,
-            text="Save ROIS",
-            width=buttonWidth,
-            height=1,
-            fg='black', bg='white',
-            command=saveRoisButtonFunc)
-        def loadRoisButtonFunc():
-            # Clear all existing ROIS
-            for i in range(len(self.rm)):
-                self.rm[i].patch.remove() # Remove the patch from the plot
-                del self.rm[i].patch # Delete the patch
-            self.rm = [] # make rm an empty list
-            fileLoc = tk.filedialog.askopenfile(mode='r',filetypes =[('text files', '*.txt')])
-            # Load the new ROIS from the file
-            with open(fileLoc.name,'r') as rf:
-                for line in rf:
-                    if line[:line.find(":")] != '#':
-                        cx,cy,w,h = list(map(int,json.loads(line[line.find(":")+1:].replace('\n',''))))
-                        self.rm.append(RoiRectangle(cx,cy,w,h,self.camAx[0]))
-                        self.rm[-1].live = True
-        self.loadRoisButton = tk.Button(
-            master=self.controls,
-            text="Load ROIS",
-            width=buttonWidth,
-            height=1,
-            fg='black', bg='white',
-            command=loadRoisButtonFunc)
-        def clearRoisButtonFunc():
-            # Clear all existing ROIS
-            for i in range(len(self.rm)):
-                self.rm[i].patch.remove() # Remove the patch from the plot
-                del self.rm[i].patch # Delete the patch
-            self.rm = [] # make rm an empty list
-        self.clearRoisButton = tk.Button(
-            master=self.controls,
-            text="Clear ROIS",
-            width=buttonWidth,
-            height=1,
-            fg='black', bg='white',
-            command=clearRoisButtonFunc)
         
+        # Adding a label for the total number of ROI's
+        self.roi_number_label_string = tk.StringVar()
+        self.roi_number_label_string.set('ROI # = 0')
+        self.roi_number_label = tk.Label(master=self.controls,textvariable=self.roi_number_label_string, bg=cntrlBg)
+        
+        # Adding labels for the x, y, and intensity at the mouse positions
+        self.cursor_xycoord_label_string = tk.StringVar()
+        self.cursor_xycoord_label_string.set('(x, y) = (0, 0)')
+        self.cursor_xycoord_label = tk.Label(master=self.controls,textvariable=self.cursor_xycoord_label_string, bg=cntrlBg)
+        
+        self.cursor_intensity_label_string = tk.StringVar()
+        self.cursor_intensity_label_string.set('pixel value = 0')
+        self.cursor_intensity_label = tk.Label(master=self.controls,textvariable=self.cursor_intensity_label_string, bg=cntrlBg)
+
         # Adding the camera controls
         self.saveImageButton = tk.Button(
             master=self.controls,
@@ -478,12 +411,14 @@ class SetupApp():
             fg='black', bg='white',
             command=self.saveImage)
         self.gain_label_string = tk.StringVar()
-        self.gain_label_string.set(f'Gain = {self.camera.getGain()} dB')
+        cgs = '%.2f' % self.camera.getGain()
+        self.gain_label_string.set(f'Gain = {cgs} dB')
         self.gain_label = tk.Label(master=self.controls,textvariable=self.gain_label_string,bg=cntrlBg)
         self.gainEntry = tk.Entry(master=self.controls,width=entryWidth)
         self.gainEntry.insert(-1,self.camera.getGain())
         self.exposure_label_string = tk.StringVar()
-        self.exposure_label_string.set(f'Exposure = {self.camera.getExposure()} s')
+        ces = '%.2f' % self.camera.getExposure()
+        self.exposure_label_string.set(f'Exposure = {ces} s')
         self.exposure_label = tk.Label(master=self.controls,textvariable=self.exposure_label_string,bg=cntrlBg)
         self.exposureEntry = tk.Entry(master=self.controls,width=entryWidth)
         self.exposureEntry.insert(-1,self.camera.getExposure())
@@ -493,24 +428,29 @@ class SetupApp():
                 self.gain = float(self.gainEntry.get())
             else:
                 self.gain = self.camera.getGain()
-                self.gainEntry.insert(-1,self.gain)
+                cgs = '%.2f' % self.gain
+                self.gainEntry.insert(-1,cgs)
                 
             if self.exposureEntry.get() != '':
                 self.exposure = float(self.exposureEntry.get())
             else:
                 self.exposure = self.camera.getExposure()
-                self.exposureEntry.insert(-1,self.exposure)
+                ces = '%.2f' % self.exposure
+                self.exposureEntry.insert(-1,ces)
             
             # If the update is substantive, then write the new values to the GUI and set a ticket for the physical camera settings to be updated at next opportunity.
             if (abs(self.gain - self.camera.getGain()) > .001) or (abs(self.exposure - self.camera.getExposure()) > .001):
                 print('Updating Camera Settings')
-                self.gain_label_string.set(f'Gain = {self.gain} dB')
-                self.exposure_label_string.set(f'Exposure = {self.exposure} s')
+                cgs = '%.2f' % self.gain
+                self.gain_label_string.set(f'Gain = {cgs} dB')
+                ces = '%.2f' % self.exposure
+                self.exposure_label_string.set(f'Exposure = {ces} s')
                 self.camSettingsUpdateInProgress = True
                     
         # Adding the ds controls
         self.currentDsPos_label_string = tk.StringVar()
-        self.currentDsPos_label_string.set(f'Current dsPos = {self.ds.getPos()} mm')
+        dps = '%.2f' % self.ds.getPos()
+        self.currentDsPos_label_string.set(f'dsPos = {dps} mm')
         self.currentDsPos_label = tk.Label(master=self.controls,textvariable=self.currentDsPos_label_string,bg=cntrlBg)
         
         dsPos1_label = tk.Label(master=self.controls,text="dsPos1 (mm)",bg=cntrlBg)
@@ -522,24 +462,26 @@ class SetupApp():
         def dsPos1ButtonFunc():
             dsPos = float(self.dsPos1Entry.get())
             self.ds.setPos(dsPos)
-            self.currentDsPos_label_string.set(f'Current dsPos = {self.ds.getPos()}')
+            dps = '%.2f' % self.ds.getPos()
+            self.currentDsPos_label_string.set(f'dsPos = {dps}')
             
         def dsPos2ButtonFunc():
             dsPos = float(self.dsPos2Entry.get())
             self.ds.setPos(dsPos)
-            self.currentDsPos_label_string.set(f'Current dsPos = {self.ds.getPos()}')
+            dps = '%.2f' % self.ds.getPos()
+            self.currentDsPos_label_string.set(f'dsPos = {dps}')
         
 
         # Adding the hwp pump controls
         self.currentFluence_label_string = tk.StringVar()
         currentHwpAngle = self.hwp.getPos()
         cfs = '%.2f' % self.malus(currentHwpAngle)
-        self.currentFluence_label_string.set(f'Current Fluence = {cfs} Ko')
+        self.currentFluence_label_string.set(f'Fluence = {cfs} Ko')
         self.currentFluence_label = tk.Label(master=self.controls,textvariable=self.currentFluence_label_string,bg=cntrlBg)
         
         self.currentHwpPos_label_string = tk.StringVar()
         chs = '%.2f' % currentHwpAngle
-        self.currentHwpPos_label_string.set(f'Current HwpPos = {chs} deg')
+        self.currentHwpPos_label_string.set(f'HWP Angle = {chs} deg')
         self.currentHwpPos_label = tk.Label(master=self.controls,textvariable=self.currentHwpPos_label_string,bg=cntrlBg)
         
         fluence1_label = tk.Label(master=self.controls,text="Fluence (Ko)",bg=cntrlBg)
@@ -550,14 +492,48 @@ class SetupApp():
             hwp_angle = self.imalus(fluence)
             
             # Check to make sure this command makes sense
-            if hwp_angle > 0 and fluence > 0 and fluence < 11:
-                # Move the hwp to the new fluence
-                self.hwp.moveAbsolute(hwp_angle)
-                currentHwpAngle = self.hwp.getPos()
-                cfs = '%.2f' % self.malus(currentHwpAngle)
-                chs = '%.2f' % currentHwpAngle
-                self.currentFluence_label_string.set(f'Current Fluence = {cfs} Ko')
-                self.currentHwpPos_label_string.set(f'Current HwpPos = {chs} deg')
+            if hwp_angle == None:
+                print('HWP motion rejected: input fluence outside possible range')
+                return
+                     
+            if hwp_angle < 0:
+                print('HWP motion rejected: angle less than zero')
+                return
+                
+            if fluence < 0:
+                print('HWP motion rejected: fluence less than zero')
+                return
+                
+            # Move the hwp to the new fluence
+            self.hwp.moveAbsolute(hwp_angle)
+            currentHwpAngle = self.hwp.getPos()
+            cfs = '%.2f' % self.malus(currentHwpAngle)
+            chs = '%.2f' % currentHwpAngle
+            self.currentFluence_label_string.set(f'Fluence = {cfs} Ko')
+            self.currentHwpPos_label_string.set(f'HWP Angle = {chs} deg')
+
+        hwp1_label = tk.Label(master=self.controls,text="HWP Angle (deg)",bg=cntrlBg)
+        self.hwp1Entry = tk.Entry(master=self.controls,width=entryWidth)
+        
+        def hwp1ButtonFunc():
+            hwp_angle = float(self.hwp1Entry.get())
+            
+            # Check to make sure this command makes sense
+            if hwp_angle < 0:
+                print('HWP motion rejected: angle less than zero')
+                return
+                
+            if hwp_angle >= 45:
+                print('HWP motion rejected: angle greater than or equal to 45')
+                return
+                
+            # Move the hwp to the new value
+            self.hwp.moveAbsolute(hwp_angle)
+            currentHwpAngle = self.hwp.getPos()
+            cfs = '%.2f' % self.malus(currentHwpAngle)
+            chs = '%.2f' % currentHwpAngle
+            self.currentFluence_label_string.set(f'Fluence = {cfs} Ko')
+            self.currentHwpPos_label_string.set(f'HWP Angle = {chs} deg')
 
         # Adding the data plot controls
         def newPointButtonFunc():
@@ -705,9 +681,9 @@ class SetupApp():
         
         # Pack controls
         add_roi_button.pack(pady=padyControls)
-        self.saveRoisButton.pack(pady=padyControls)
-        self.loadRoisButton.pack(pady=padyControls)
-        self.clearRoisButton.pack(pady=padyControls)
+        self.roi_number_label.pack(pady=padyControls)
+        self.cursor_xycoord_label.pack(pady=padyControls)
+        self.cursor_intensity_label.pack(pady=padyControls)
         tk.Frame(master=self.controls, bd=100, relief='flat',height=sepHeight,width=sepWidth,bg='black').pack(side='top', pady=padySep)
         self.gain_label.pack(pady=padyControls)
         self.gainEntry.pack(pady=padyControls)
@@ -726,6 +702,10 @@ class SetupApp():
         self.currentHwpPos_label.pack(pady=padyControls)
         fluence1_label.pack(pady=padyControls)
         self.fluence1Entry.pack(pady=padyControls)
+        
+        hwp1_label.pack(pady=padyControls)
+        self.hwp1Entry.pack(pady=padyControls)
+        
         tk.Frame(master=self.controls, bd=100, relief='flat',height=sepHeight,width=sepWidth,bg='black').pack(side='top', pady=padySep)
         self.newPointButton.pack(pady=padyControls)
         self.clearDataButton.pack(pady=padyControls)
@@ -736,7 +716,6 @@ class SetupApp():
         self.avgDirLocEntry.pack(pady=padyControls)
         self.imageSetButton.pack(pady=padyControls)
         # ~ tk.Frame(master=self.controls, bd=100, relief='flat',height=sepHeight,width=sepWidth,bg='black').pack(side='top', pady=padySep)
-        
         
         scanSweepSelection_label.pack()
         scanSweepSelection_button.pack(pady=padyControls)
@@ -765,7 +744,9 @@ class SetupApp():
                 dsPos2ButtonFunc()
             if entry == self.fluence1Entry:
                 fluence1ButtonFunc()
-
+            if entry == self.hwp1Entry:
+                hwp1ButtonFunc()
+                
         # Bind the enter key to activate selected entry
         self.root.bind('<Return>', userPressReturn)
         
@@ -800,22 +781,23 @@ class SetupApp():
         slider_vmin.on_changed(sliderUpdateVmin)
         
         # Make the line profile crosshairs
-        self.lineProfile_x = self.w//2
-        self.lineProfile_y = self.h//2
-        self.lineProfile_v = self.camAx[0].axvline(x=self.lineProfile_x,c='black')
-        self.lineProfile_h = self.camAx[0].axhline(y=self.lineProfile_y,c='black')
+        self.lineProfile_x1 = self.w//2
+        self.lineProfile_y1 = self.h//2
+        
+        # 2nd point te line profile crosses through
+        self.lineProfile_x2 = self.lineProfile_x1 + 1
+        self.lineProfile_y2 = self.lineProfile_y1
+        
+        # ~ self.lineProfile_h = self.camAx[0].axhline(y=self.lineProfile_y,c='black')
+        self.lineProfile_v = self.camAx[0].axline((self.lineProfile_x1, self.lineProfile_y1), (self.lineProfile_x1-(self.lineProfile_y2 - self.lineProfile_y1), self.lineProfile_y1 + (self.lineProfile_x2 - self.lineProfile_x1)), c='black', linestyle = 'dashed')
+        self.lineProfile_upper_v = self.camAx[1].axvline(x = self.lineProfile_x1, c='black', linestyle = 'dashed')
+        self.lineProfile_h = self.camAx[0].axline((self.lineProfile_x1, self.lineProfile_y1), (self.lineProfile_x2, self.lineProfile_y2), c='black')
         
         # Plot the cam image and the line profile crosshairs
         self.camImageObj = self.camAx[0].imshow(self.camImage)
-        self.lineProfilePlot_v, = self.camAx[1].plot(self.camImage[:,int(self.lineProfile_x)],range(self.h))
-        self.lineProfilePlot_h, = self.camAx[2].plot(range(self.w),self.camImage[int(self.lineProfile_y),:])
+        self.lineProfilePlot_h, = self.camAx[1].plot(self.displayImage[:,self.displayImage.shape[1]//2])
+        self.updateLineProfilePlot()
         
-        pos0 = self.camAx[0].get_position()
-        pos1 = self.camAx[1].get_position()
-        pos2 = self.camAx[2].get_position()
-        self.camAx[1].set_position([pos1.x0,pos0.y0,pos1.width,pos0.height])
-        self.camAx[2].set_position([pos0.x0,pos2.y0,pos0.width,pos2.height])
-
         # Connect the cam figure to key press events
         self.camFig.canvas.mpl_connect('button_press_event', self.camonclick)
         self.camFig.canvas.mpl_connect('scroll_event', self.camonscroll)
@@ -830,20 +812,13 @@ class SetupApp():
         self.label.pack()
         
         # Create the data plot
-        self.dataFig, self.dataAx = plt.subplots(3,1,figsize=(4, 6))
+        self.dataFig, self.dataAx = plt.subplots(2,1,figsize=(4, 6))
         self.dataFig.subplots_adjust(left=0.2, hspace=0.4)
         self.liveIntensityPlot, = self.dataAx[0].plot([],[],'go-') # live intensity plot
         self.dataAx[0].set_xlabel('Time (s)')
         self.avgIntensityPlot = self.dataAx[1].errorbar(range(len(self.avgIntensity)),self.avgIntensity,self.stdIntensity,\
                                                         marker='o',color='green',elinewidth=1,capsize=5) # average intensiity plot with error bars at 1 sigma
         self.dataAx[1].set_xlabel('Data Point #')
-        
-        # Get the virtual sample camera
-        self.hayearCam = lab_instruments.HayearCamera()
-        
-        self.hayearCamImageObj = self.dataAx[2].imshow(self.hayearCam.grabImage())
-        self.dataAx[2].set_xticks([])
-        self.dataAx[2].set_yticks([])
         
         # Attach the matplotlib data figures to a tkinter gui window
         self.datacanvas = FigureCanvasTkAgg(self.dataFig, master=self.dataFrame)
@@ -885,14 +860,33 @@ class SetupApp():
             scansweepselection =  str(self.scanSweepSelection.get())
             print(f'scanDir: {scanDir} \n')
             
+            # Read the user entries
+            dsPositions = parsePosStr(str(self.scanDsPosEntry.get()))
+            fluences = parsePosStr(str(self.scanFluenceEntry.get()))
+            hwpWait = float(self.scanHwpWaitEntry.get())
+            batchSize = int(self.batchSizeEntry.get())
+            tcq = bool(self.varTransCorr.get())
+            smfq = bool(self.varScanMedianFilter.get())
+            ssq = bool(self.varSmartScan.get())
+            
+            # Compute the array of hwp values from the fluences
+            hwp_arr = np.empty(len(fluences))
+            for i in range(len(hwp_arr)):
+                hwp_val = self.imalus(fluences[i]) 
+                if hwp_val == None:
+                    print(f'WARNING! Fluence outside acceptable range: {fluences[i]}')
+                hwp_arr[i] = hwp_val
+            
             # Write the metadata file
             nowString = datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
             scanParamsDict = { \
                             'scanStartTime':nowString,\
                             'gain':str(self.gainEntry.get()),\
                             'exposure':str(self.exposureEntry.get()),\
-                            'dsPositions':str(self.scanDsPosEntry.get()),\
-                            'fluences':str(self.scanFluenceEntry.get()),\
+                            'dsPositions entry':str(self.scanDsPosEntry.get()),\
+                            'dsPositions_array':str(dsPositions),\
+                            'fluences entry':str(self.scanFluenceEntry.get()),\
+                            'hwp_array':str(hwp_arr),\
                             'hwp wait':str(self.scanHwpWaitEntry.get()),\
                             'batchSize':str(self.batchSizeEntry.get()),\
                             'translationCorrection':str(self.varTransCorr.get()),\
@@ -905,7 +899,6 @@ class SetupApp():
                     
             # Update the persistent settings file
             psParamsDict = { \
-                'tzpos':persistent_settings_dict['tzpos'],\
                 'dsPositions':str(self.scanDsPosEntry.get()),\
                 'fluences':str(self.scanFluenceEntry.get()),\
                 'pump_malus_A':persistent_settings_dict['pump_malus_A'],\
@@ -915,26 +908,17 @@ class SetupApp():
             with open(f'persistent_settings.txt','w') as psf:
                 for key, value in psParamsDict.items():
                     psf.write('%s:%s\n' % (key, value))
-                    
-            dsPositions = parsePosStr(str(self.scanDsPosEntry.get()))
-            fluences = parsePosStr(str(self.scanFluenceEntry.get()))
-            hwpWait = float(self.scanHwpWaitEntry.get())
-            batchSize = int(self.batchSizeEntry.get())
-            tcq = bool(self.varTransCorr.get())
-            smfq = bool(self.varScanMedianFilter.get())
-            ssq = bool(self.varSmartScan.get())
-            tzpos = float(persistent_settings_dict['tzpos'])
+
             
             self.root.destroy() # Totally destroy the setup gui so we can move into the scan gui
             
             scanapp = ScanApp(camera=self.camera,ds=self.ds,hwp=self.hwp,dsPositions=dsPositions,fluences=fluences,hwpWait=hwpWait,imalus=self.imalus,batchSize=batchSize,\
-                              translationCorrectionQ=tcq, scanMedianFilterQ=smfq, smartScanQ=ssq, scanDir=scanDir, tzpos=tzpos, rm=self.rm, scansweepselection = scansweepselection)
+                              translationCorrectionQ=tcq, scanMedianFilterQ=smfq, smartScanQ=ssq, scanDir=scanDir, rm=self.rm, scansweepselection = scansweepselection)
         else:
             print('Disconnecting camera and delay stage')
             self.ds.disconnect() # disconnect from delay stage
             #  Ending acquisition appropriately helps ensure that devices clean up
             #  properly and do not need to be power-cycled to maintain integrity.
-            self.hayearCam.disconnect()
             self.camera.setExposure(1) # Reset exposure to 1.0 s and disconnect from the camera.
             self.camera.disconnect() # disconnect from camera
       
@@ -943,17 +927,58 @@ class SetupApp():
         # Find the location of the mouse click and update the crosshair variable to this value
         selection = self.roiSelection.get()
         if event.inaxes == ax:
-            if event.button == 1:
-                if selection == 'line profile':
-                    self.lineProfile_y = event.ydata
-                    self.lineProfile_x = event.xdata
-                if selection == 'roi rectangle':
+            if selection == 'line profile':
+                if event.button == 1:
+                    # compute the vector from the 1 point to the 2 point of the line
+                    delta_x, delta_y = self.lineProfile_x2 - self.lineProfile_x1, self.lineProfile_y2 - self.lineProfile_y1
+                    
+                    # update the 1st point coordinates
+                    self.lineProfile_x1, self.lineProfile_y1 = event.xdata, event.ydata
+                    
+                    # update the 2nd point coordinates
+                    self.lineProfile_x2, self.lineProfile_y2 = delta_x + self.lineProfile_x1, delta_y + self.lineProfile_y1
+                    
+                    # Set the center position for the horizontal line
+                    self.lineProfile_h.set_xy1(x=self.lineProfile_x1, y=self.lineProfile_y1)
+                    
+                    # Set the 2nd position of the horizontal line 
+                    self.lineProfile_h.set_xy2(x=self.lineProfile_x2, y=self.lineProfile_y2)
+                    
+                    # Set the center position for the vertical line in both upper and lower plots
+                    self.lineProfile_v.set_xy1(x=self.lineProfile_x1, y=self.lineProfile_y1)
+                    self.lineProfile_upper_v.set_xdata([self.lineProfile_x1])
+
+                if event.button == 3:
+                    if (self.lineProfile_x1 != event.xdata or self.lineProfile_y1 != event.ydata):
+                        self.lineProfile_x2, self.lineProfile_y2 = event.xdata, event.ydata
+                        self.lineProfile_h.set_xy2(x=self.lineProfile_x2, y=self.lineProfile_y2)
+                                     
+                # Keep the vertical line vertical
+                self.lineProfile_v.set_xy2(x=self.lineProfile_x1, y=self.lineProfile_y1 - 1)
+                                           
+
+                self.updateLineProfilePlot()
+
+            if selection == 'roi rectangle':
+                if event.button == 1:
                     if self.roiActive:
                         self.roiActive = False
                         self.rm[-1].goLive() # Set the roi that was just placed to live status
                     else:
                         self.roiActive = True
                         self.rm.append(RoiRectangle(event.xdata,event.ydata,0,0,ax))
+                        
+                if event.button == 3:
+                    for i in range(len(self.rm)):
+                        if abs(event.xdata-self.rm[i].cx) < self.rm[i].w/2 and abs(event.ydata-self.rm[i].cy) < self.rm[i].h/2:
+                            self.rm[i].patch.remove() # Remove the patch from the plot
+                            del self.rm[i].patch # Delete the patch
+                            self.rm.pop(i) # Pop this item from the rm list
+                            break # Exits the loop on the first occurance of a ROI to remove.
+                
+                self.roi_number_label_string.set(f'ROI # = {len(self.rm)}')        
+                
+            
             if event.button == 2:
                 cur_xlim = ax.get_xlim()
                 cur_ylim = ax.get_ylim()
@@ -976,21 +1001,8 @@ class SetupApp():
                 # set the new limits
                 ax.set_xlim(*xlims)
                 ax.set_ylim(*ylims)
-            if event.button == 3:
-                for i in range(len(self.rm)):
-                    if abs(event.xdata-self.rm[i].cx) < self.rm[i].w/2 and abs(event.ydata-self.rm[i].cy) < self.rm[i].h/2:
-                        self.rm[i].patch.remove() # Remove the patch from the plot
-                        del self.rm[i].patch # Delete the patch
-                        self.rm.pop(i) # Pop this item from the rm list
-                        break # Exits the loop on the first occurance of a ROI to remove.
-                        
-                        
-            self.lineProfile_v.set_xdata([self.lineProfile_x])
-            self.lineProfile_h.set_ydata([self.lineProfile_y])
-            self.lineProfilePlot_v.set_xdata(self.displayImage[:,int(self.lineProfile_x)])
-            self.camAx[1].set_xlim(min(self.displayImage[:,int(self.lineProfile_x)])-0.01,max(self.displayImage[:,int(self.lineProfile_x)])+0.01)
-            self.lineProfilePlot_h.set_ydata(self.displayImage[int(self.lineProfile_y),:])
-            self.camAx[2].set_ylim(min(self.displayImage[int(self.lineProfile_y),:])-0.01,max(self.displayImage[int(self.lineProfile_y),:])+0.01)   
+            
+    
             self.canvas.draw()
             
     def camonscroll(self, event, base_scale = 1.15):
@@ -1038,10 +1050,16 @@ class SetupApp():
     def camonmove(self, event):
         ax = self.camAx[0]
         if event.inaxes == ax:
+            if (int(event.xdata) >= 0) and (int(event.ydata) >= 0) and (int(event.xdata) < self.displayImage.shape[1]) and (int(event.ydata) < self.displayImage.shape[0]):
+                self.mouse_x = int(event.xdata)
+                self.mouse_y = int(event.ydata)
             if self.roiActive:
-                self.rm[-1].updateShape(abs(event.xdata - self.rm[-1].cx)*2,abs(event.ydata - self.rm[-1].cy)*2) # width, height
+                self.rm[-1].updateShape(abs(self.mouse_x - self.rm[-1].cx)*2,abs(self.mouse_y - self.rm[-1].cy)*2) # width, height
                 self.canvas.draw()
-    
+            
+            self.cursor_xycoord_label_string.set(f'(x, y) = ({self.mouse_x}, {self.mouse_y})')
+            self.cursor_intensity_label_string.set(f'pixel value = {int(self.displayImage[self.mouse_y, self.mouse_x])}')
+            
     def saveImage(self):
         now = datetime.datetime.now()
         nowString = now.strftime("%Y_%m_%d-%H_%M_%S")
@@ -1056,6 +1074,16 @@ class SetupApp():
         
         if self.saveImageFileName != None:
             tifffile.imwrite(self.saveImageFileName.name,self.displayImage)
+            
+        del self.saveImageFileName
+    
+    def updateLineProfilePlot(self):
+        # Put the data from the display image to the line profile
+        line_profile_data = data_analysis.getLineProfile(self.displayImage, (self.lineProfile_x1, self.lineProfile_y1), (self.lineProfile_x2, self.lineProfile_y2))
+        self.lineProfilePlot_h.set_ydata(line_profile_data)
+        if len(line_profile_data[line_profile_data!=0]) > 0:
+            self.camAx[1].set_ylim(min(line_profile_data[line_profile_data!=0])-1,max(line_profile_data)+1) # set the scales for us to see the data
+            self.camAx[1].set_yticks([min(line_profile_data[line_profile_data!=0]),(0.5*max(line_profile_data)+0.5*min(line_profile_data[line_profile_data!=0])),max(line_profile_data)])
         
     def dataAcquisitionLoop(self):
         thrImage = None
@@ -1063,11 +1091,6 @@ class SetupApp():
         newPointSwitch = False
         
         while self.camLive == 1:
-            print('________________________________')
-            print(self.camera.getExposure(),self.camera.getGain())
-            print('temp',self.camera.cam.DeviceTemperature())
-            print('power supply current',self.camera.cam.PowerSupplyCurrent())
-            print('power supply voltage',self.camera.cam.PowerSupplyVoltage())
             # Make sure the image thread has concluded
             if (thrImage != None) and (thrImage.is_alive()):
                 thrImage.join()
@@ -1119,7 +1142,7 @@ class SetupApp():
                 
                 # Check whether despeckle is applied
                 if self.varMedianFilter.get() == 1:
-                    self.camImage = median_filter(self.camImage, size=3)
+                    self.camImage = median_filter(self.camImage, size = 3)
                 
                 # Check whether image averaging is selected in which the display will be updated to an average of all the images taken    
                 if self.varAvgDis.get() == 0:
@@ -1134,19 +1157,16 @@ class SetupApp():
                 
                 # Compute the image rate
                 deltaTString = '%.3f' % round(time.time()-self.t1,5)
-                # ~ print(type(self.displayImage[int(self.lineProfile_y),int(self.lineProfile_x)]))
-                self.camAx[0].set_title(f"Image Rate =  {deltaTString} s, ROI # = {len(self.rm)} \n Pixel Value {round(self.displayImage[int(self.lineProfile_y),int(self.lineProfile_x)],1)}")
+                self.camAx[0].set_title(f"Image Rate =  {deltaTString} s")
+                
+                # Update the intensity value for the cursor given the new image
+                self.cursor_intensity_label_string.set(f'pixel value = {int(self.displayImage[self.mouse_y, self.mouse_x])}')
                 
                 self.t1 = time.time()
                 
                 self.camImageObj.set_data(self.displayImage) # Set image data to the plot
-                self.lineProfile_v.set_xdata([self.lineProfile_x])
-                self.lineProfile_h.set_ydata([self.lineProfile_y])
-                self.lineProfilePlot_v.set_xdata(self.displayImage[:,int(self.lineProfile_x)])
-                self.camAx[1].set_xlim(min(self.displayImage[:,int(self.lineProfile_x)]),max(self.displayImage[:,int(self.lineProfile_x)]))
-                self.lineProfilePlot_h.set_ydata(self.displayImage[int(self.lineProfile_y),:])
-                self.camAx[2].set_ylim(min(self.displayImage[int(self.lineProfile_y),:]),max(self.displayImage[int(self.lineProfile_y),:]))
-                
+                self.updateLineProfilePlot()
+
                 if len(self.rm) > 0:
                     roiPixelSum = 0
                     roiTotalArea = 0
@@ -1174,9 +1194,6 @@ class SetupApp():
                 self.liveIntensityPlot.set_ydata(self.intensityHistory)
                 
                 update_errorbar(self.avgIntensityPlot,range(len(self.avgIntensity)),self.avgIntensity,yerr=self.stdIntensity)
-                
-                # Get an image of the virtual sample
-                self.hayearCamImageObj.set_data(self.hayearCam.grabImage())
                 
                 # Update the figures
                 self.canvas.draw()
@@ -1224,7 +1241,7 @@ class SetupApp():
         self.processPrev = True # Tell the data acquisition loop that there is an image that needs processing
        
 class ScanApp():
-    def __init__(self, camera, ds, hwp, dsPositions, fluences, hwpWait, imalus, batchSize, translationCorrectionQ, scanMedianFilterQ, smartScanQ, scanDir, tzpos, rm, scansweepselection, dsWait = 0.1, wait = .033):
+    def __init__(self, camera, ds, hwp, dsPositions, fluences, hwpWait, imalus, batchSize, translationCorrectionQ, scanMedianFilterQ, smartScanQ, scanDir, rm, scansweepselection, dsWait = 0.1, wait = .033):
         self.camera=camera
         self.ds=ds
         self.hwp=hwp
@@ -1240,7 +1257,6 @@ class ScanApp():
         self.smartScanQ=smartScanQ
         self.scanDir=scanDir
         self.dsWait = dsWait
-        self.tzpos = tzpos
         self.rm = rm
         self.scansweepselection = scansweepselection
         
@@ -1348,11 +1364,13 @@ class ScanApp():
         self.dsPosition_label = tk.Label(master=self.controls,textvariable=self.dsPosition_label_string,bg=cntrlBg)
         
         self.exposure_label_string = tk.StringVar()
-        self.exposure_label_string.set(f'Exposure = {self.camera.getExposure()} s')
+        ces = '%.2f' % self.camera.getExposure()
+        self.exposure_label_string.set(f'Exposure = {ces} s')
         self.exposure_label = tk.Label(master=self.controls,textvariable=self.exposure_label_string,bg=cntrlBg)
         
         self.gain_label_string = tk.StringVar()
-        self.gain_label_string.set(f'Gain = {self.camera.getGain()} dB')
+        cgs = '%.2f' % self.camera.getGain()
+        self.gain_label_string.set(f'Gain = {cgs} dB')
         self.gain_label = tk.Label(master=self.controls,textvariable=self.gain_label_string,bg=cntrlBg)
         
         def pauseScanButtonFunc():
@@ -1595,7 +1613,8 @@ class ScanApp():
                     dsReadBack = self.ds.getPos()
                     
                     # Write the current ds pos to the gui
-                    self.dsPosition_label_string.set(f"dsPos = {dsReadBack} mm")
+                    dps = '%.2f' % dsReadBack
+                    self.dsPosition_label_string.set(f"dsPos = {dps} mm")
                     
                     # Record the current ds pos and the read back pos in the run log
                     self.runLog += f'\t \t Delay Stage Set: pi = {pi}, dsSet = {dsPos}, dsReadBack = {dsReadBack}| (t-t_start) =  {round(time.time()-self.t_start,2)} \n'
@@ -1670,7 +1689,7 @@ class ScanApp():
             # Save the run log to a txt file
             with open(self.scanDir + '//' + self.runLogFileName, "w") as text_file:
                 text_file.write(self.runLog)
-            if len(self.runLog) > 1e5:
+            if len(self.runLog) > 1e6:
                 now = datetime.datetime.now()
                 self.runLog = f'log started at {now.strftime("%Y_%m_%d-%H_%M_%S")} \n'
                 self.runLogFileName = f'runLog_{now.strftime("%Y_%m_%d-%H_%M_%S")}.txt'
@@ -1887,7 +1906,7 @@ class ScanApp():
                                marker='o',color='green',elinewidth=1,capsize=5,linestyle='') # scan intensity plot with error bars at 1 sigma
             axs[1,0].set_xlabel('dsPos (mm)')
             
-            scanTimes = (self.tzpos-self.dsPositions)*6.671281904
+            scanTimes = (55-self.dsPositions)*6.671281904 # 55 is chosen as a nominal "time zero" to keep the values reasonable
             
             axs[1,1].errorbar(scanTimes,self.intensityScanTime,self.stdIntensityScanTime,\
                        marker='o',color='green',elinewidth=1,capsize=5,linestyle='') # scan intensity plot with error bars at 1 sigma
@@ -1932,5 +1951,4 @@ class ScanApp():
                     
 if __name__ == '__main__':
     app = SetupApp()
-
                
