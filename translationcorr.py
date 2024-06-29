@@ -186,6 +186,10 @@ def fitImageToGaussian(pixelData, preliminaryScanNumber = [20,20], returnGuessPa
         bounds_prms = ([0,0,0,0,0,0,-np.pi/2],[w,h,sci.inf,sci.inf,2**8,2**8,np.pi/2])
     if pixelData.dtype == np.uint16:
         bounds_prms = ([0,0,0,0,0,0,-np.pi/2],[w,h,sci.inf,sci.inf,2**16,2**16,np.pi/2])
+    if pixelData.dtype == np.uint32 or pixelData.dtype == np.float32:
+        bounds_prms = ([0,0,0,0,0,0,-np.pi/2],[w,h,sci.inf,sci.inf,2**32,2**32,np.pi/2])
+    if pixelData.dtype == np.uint64 or pixelData.dtype == np.float64:
+        bounds_prms = ([0,0,0,0,0,0,-np.pi/2],[w,h,sci.inf,sci.inf,2**64,2**64,np.pi/2])
 
     # The two-dimensional domain of the fit.
     X, Y = np.meshgrid(X_ROI, Y_ROI)
@@ -324,7 +328,6 @@ def findSignalVariance(signal):
         xvar += signal_normed[j]*(j-x_bar)**2
     return x_bar, xvar
 
-
 def plotStack(x,y,Z,swapXY=False):
     #x should be single array of values along x axis, plotting axis
     #y should be single array of values along y axis, jumping axis (len(y) must equal number of curves)
@@ -341,7 +344,32 @@ def plotStack(x,y,Z,swapXY=False):
 			yy = np.ones(x.size)*y[i]
 			ax.plot(yy,x,Z[i])
 
+def fft_sub_pixel_shift(image, shift):
+    # shift is in shape [x shift, y shift]
+    fft_image = np.fft.fftshift(np.fft.fft2(image))
+    kx = np.linspace(-np.pi, np.pi, image.shape[1])
+    ky = np.linspace(-np.pi, np.pi, image.shape[0])
+    KX, KY = np.meshgrid(kx, ky)
+    fft_image_phaseshift = np.fft.ifftshift(fft_image*np.exp(-1.0j*(KX * shift[0] + KY * shift[1])))
+    
+    return sci.fft.ifft2(fft_image_phaseshift).real
+
 
 if __name__ == '__main__':
-    image = tifffile.imread(r"C:\Users\thoma\OneDrive - UCLA IT Services\Documents\GitHub\smartScan\initialRoi_0.tiff")
-    fitImageToGaussian(image,verbose=True)
+    image = tifffile.imread(r"C:\Users\thoma\Documents\GitHub\smartScan\testDir\roi_test.tif")
+    # ~ popt, rms, guess_prms = fitImageToGaussian(image,verbose=False)
+    import time
+    
+    t0 = time.time()
+
+    
+    for i in range(10):
+        # ~ image_new = sub_pixel_shift(image, [30, 50])
+        image_new = sci.ndimage.shift(image, [0, 0], mode = 'grid-wrap')
+    # ~ image_new = np.roll(image, [30.1, 50],)
+        
+    tf = time.time()
+    print(tf - t0)
+
+    plt.imshow(image_new)
+    plt.show()

@@ -130,3 +130,21 @@ axs[2].set_xlabel('Current (mA)')
 
 plt.show()
 # ~ 2.46Kohms
+
+
+
+
+J = 240
+indices = np.concatenate((np.arange(J, 2*J), np.arange(3*J, 4*J), np.arange(5*J, 6*J), np.arange(7*J, 8*J), np.arange(9*J, 10*J), np.arange(11*J, 12*J), np.arange(13*J, 14*J), np.arange(15*J, 16*J)))
+Icrop_crop = Icrop[indices]
+
+fig, axs = plt.subplots(1,2)
+if mode == 'log':
+    axs[0].imshow(np.log(Icrop_crop [:,int(ycentroid),:] + 1), aspect = 'auto')
+    axs[1].imshow(np.log(Icrop_crop [:,:,int(xcentroid)] + 1), aspect = 'auto')
+    fig.suptitle(f'Log Scale Waterfall Plots, uid = {uid}')
+if mode == 'linear':
+    axs[0].imshow(Icrop_crop[:,int(ycentroid),:], aspect = 'auto', vmax = 1000)
+    axs[1].imshow(Icrop_crop[:,:,int(xcentroid)], aspect = 'auto', vmax = 1000)
+    fig.suptitle(f'Linear Scale Waterfall Plots, uid = {uid}')
+fig.suptitle(f'Log Scale Waterfall Plots, uid = {uid}')

@@ -1,0 +1,128 @@
+scan app started at 2024_06_28-19_18_34 
+dataAcquisitionLoop started at 2024_06_28-19_18_34 
+batch 0 started at 2024_06_28-19_18_34 
+set fluence = 10.0 Ko, set hwpPos = 36.79994154921453 deg, read hwpPos = 36.79994154921453 deg
+	 scan 0 (bi = 0) started at 2024_06_28-19_18_34 
+	 	 Delay Stage Set: pi = 0, dsSet = 1.0, dsReadBack = 1.0| (t-t_start) =  0.13 
+	 	 Delay Stage Set: pi = 3, dsSet = 4.0, dsReadBack = 4.0| (t-t_start) =  0.36 
+	 	 Delay Stage Set: pi = 6, dsSet = 9.0, dsReadBack = 9.0| (t-t_start) =  0.6 
+	 	 Delay Stage Set: pi = 5, dsSet = 7.0, dsReadBack = 7.0| (t-t_start) =  0.85 
+	 	 Delay Stage Set: pi = 9, dsSet = 13.0, dsReadBack = 13.0| (t-t_start) =  1.09 
+	 	 Delay Stage Set: pi = 7, dsSet = 10.0, dsReadBack = 10.0| (t-t_start) =  1.34 
+	 	 Delay Stage Set: pi = 10, dsSet = 16.0, dsReadBack = 16.0| (t-t_start) =  1.57 
+	 	 Delay Stage Set: pi = 2, dsSet = 3.0, dsReadBack = 3.0| (t-t_start) =  1.81 
+	 	 Delay Stage Set: pi = 8, dsSet = 11.0, dsReadBack = 11.0| (t-t_start) =  2.05 
+	 	 Delay Stage Set: pi = 16, dsSet = 32.0, dsReadBack = 32.0| (t-t_start) =  2.27 
+	 	 Delay Stage Set: pi = 4, dsSet = 5.0, dsReadBack = 5.0| (t-t_start) =  2.49 
+	 	 Delay Stage Set: pi = 15, dsSet = 28.0, dsReadBack = 28.0| (t-t_start) =  2.72 
+	 	 Delay Stage Set: pi = 13, dsSet = 22.0, dsReadBack = 22.0| (t-t_start) =  2.96 
+	 	 Delay Stage Set: pi = 14, dsSet = 24.0, dsReadBack = 24.0| (t-t_start) =  3.19 
+	 	 Delay Stage Set: pi = 1, dsSet = 2.0, dsReadBack = 2.0| (t-t_start) =  3.53 
+	 	 Delay Stage Set: pi = 11, dsSet = 19.0, dsReadBack = 19.0| (t-t_start) =  3.76 
+	 	 Delay Stage Set: pi = 12, dsSet = 20.0, dsReadBack = 20.0| (t-t_start) =  3.99 
+batch 1 started at 2024_06_28-19_18_39 
+set fluence = 10.0 Ko, set hwpPos = 36.79994154921453 deg, read hwpPos = 36.79994154921453 deg
+	 scan 1 (bi = 0) started at 2024_06_28-19_18_39 
+	 	 Delay Stage Set: pi = 12, dsSet = 20.0, dsReadBack = 20.0| (t-t_start) =  4.34 
+movingAverageBatch thread completed for b = 0 at 2024_06_28-19_18_39 
+	 	 Delay Stage Set: pi = 14, dsSet = 24.0, dsReadBack = 24.0| (t-t_start) =  4.56 
+	 	 Delay Stage Set: pi = 11, dsSet = 19.0, dsReadBack = 19.0| (t-t_start) =  4.82 
+	 	 Delay Stage Set: pi = 6, dsSet = 9.0, dsReadBack = 9.0| (t-t_start) =  5.03 
+	 	 Delay Stage Set: pi = 10, dsSet = 16.0, dsReadBack = 16.0| (t-t_start) =  5.28 
+	 	 Delay Stage Set: pi = 9, dsSet = 13.0, dsReadBack = 13.0| (t-t_start) =  5.52 
+	 	 Delay Stage Set: pi = 15, dsSet = 28.0, dsReadBack = 28.0| (t-t_start) =  5.77 
+	 	 Delay Stage Set: pi = 8, dsSet = 11.0, dsReadBack = 11.0| (t-t_start) =  6.02 
+	 	 Delay Stage Set: pi = 7, dsSet = 10.0, dsReadBack = 10.0| (t-t_start) =  6.26 
+	 	 Delay Stage Set: pi = 13, dsSet = 22.0, dsReadBack = 22.0| (t-t_start) =  6.51 
+	 	 Delay Stage Set: pi = 16, dsSet = 32.0, dsReadBack = 32.0| (t-t_start) =  6.74 
+	 	 Delay Stage Set: pi = 2, dsSet = 3.0, dsReadBack = 3.0| (t-t_start) =  6.96 
+	 	 Delay Stage Set: pi = 1, dsSet = 2.0, dsReadBack = 2.0| (t-t_start) =  7.19 
+	 	 Delay Stage Set: pi = 5, dsSet = 7.0, dsReadBack = 7.0| (t-t_start) =  7.44 
+	 	 Delay Stage Set: pi = 4, dsSet = 5.0, dsReadBack = 5.0| (t-t_start) =  7.65 
+	 	 Delay Stage Set: pi = 3, dsSet = 4.0, dsReadBack = 4.0| (t-t_start) =  7.89 
+	 	 Delay Stage Set: pi = 0, dsSet = 1.0, dsReadBack = 1.0| (t-t_start) =  8.13 
+batch 2 started at 2024_06_28-19_18_43 
+set fluence = 10.0 Ko, set hwpPos = 36.79994154921453 deg, read hwpPos = 36.79994154921453 deg
+	 scan 2 (bi = 0) started at 2024_06_28-19_18_43 
+	 	 Delay Stage Set: pi = 9, dsSet = 13.0, dsReadBack = 13.0| (t-t_start) =  8.52 
+	 	 Delay Stage Set: pi = 0, dsSet = 1.0, dsReadBack = 1.0| (t-t_start) =  8.74 
+movingAverageBatch thread completed for b = 1 at 2024_06_28-19_18_43 
+	 	 Delay Stage Set: pi = 7, dsSet = 10.0, dsReadBack = 10.0| (t-t_start) =  8.97 
+	 	 Delay Stage Set: pi = 4, dsSet = 5.0, dsReadBack = 5.0| (t-t_start) =  9.23 
+	 	 Delay Stage Set: pi = 1, dsSet = 2.0, dsReadBack = 2.0| (t-t_start) =  9.45 
+	 	 Delay Stage Set: pi = 8, dsSet = 11.0, dsReadBack = 11.0| (t-t_start) =  9.69 
+	 	 Delay Stage Set: pi = 6, dsSet = 9.0, dsReadBack = 9.0| (t-t_start) =  9.93 
+	 	 Delay Stage Set: pi = 11, dsSet = 19.0, dsReadBack = 19.0| (t-t_start) =  10.17 
+	 	 Delay Stage Set: pi = 2, dsSet = 3.0, dsReadBack = 3.0| (t-t_start) =  10.41 
+	 	 Delay Stage Set: pi = 3, dsSet = 4.0, dsReadBack = 4.0| (t-t_start) =  10.65 
+	 	 Delay Stage Set: pi = 13, dsSet = 22.0, dsReadBack = 22.0| (t-t_start) =  10.9 
+	 	 Delay Stage Set: pi = 15, dsSet = 28.0, dsReadBack = 28.0| (t-t_start) =  11.14 
+	 	 Delay Stage Set: pi = 12, dsSet = 20.0, dsReadBack = 20.0| (t-t_start) =  11.36 
+	 	 Delay Stage Set: pi = 5, dsSet = 7.0, dsReadBack = 7.0| (t-t_start) =  11.6 
+	 	 Delay Stage Set: pi = 14, dsSet = 24.0, dsReadBack = 24.0| (t-t_start) =  11.85 
+	 	 Delay Stage Set: pi = 10, dsSet = 16.0, dsReadBack = 16.0| (t-t_start) =  12.06 
+	 	 Delay Stage Set: pi = 16, dsSet = 32.0, dsReadBack = 32.0| (t-t_start) =  12.3 
+batch 3 started at 2024_06_28-19_18_47 
+set fluence = 10.0 Ko, set hwpPos = 36.79994154921453 deg, read hwpPos = 36.79994154921453 deg
+	 scan 3 (bi = 0) started at 2024_06_28-19_18_47 
+	 	 Delay Stage Set: pi = 14, dsSet = 24.0, dsReadBack = 24.0| (t-t_start) =  12.68 
+movingAverageBatch thread completed for b = 2 at 2024_06_28-19_18_47 
+	 	 Delay Stage Set: pi = 10, dsSet = 16.0, dsReadBack = 16.0| (t-t_start) =  12.9 
+	 	 Delay Stage Set: pi = 9, dsSet = 13.0, dsReadBack = 13.0| (t-t_start) =  13.13 
+	 	 Delay Stage Set: pi = 11, dsSet = 19.0, dsReadBack = 19.0| (t-t_start) =  13.35 
+	 	 Delay Stage Set: pi = 4, dsSet = 5.0, dsReadBack = 5.0| (t-t_start) =  13.58 
+	 	 Delay Stage Set: pi = 13, dsSet = 22.0, dsReadBack = 22.0| (t-t_start) =  13.82 
+	 	 Delay Stage Set: pi = 8, dsSet = 11.0, dsReadBack = 11.0| (t-t_start) =  14.06 
+	 	 Delay Stage Set: pi = 16, dsSet = 32.0, dsReadBack = 32.0| (t-t_start) =  14.3 
+	 	 Delay Stage Set: pi = 2, dsSet = 3.0, dsReadBack = 3.0| (t-t_start) =  14.55 
+	 	 Delay Stage Set: pi = 1, dsSet = 2.0, dsReadBack = 2.0| (t-t_start) =  14.77 
+	 	 Delay Stage Set: pi = 6, dsSet = 9.0, dsReadBack = 9.0| (t-t_start) =  15.0 
+	 	 Delay Stage Set: pi = 12, dsSet = 20.0, dsReadBack = 20.0| (t-t_start) =  15.24 
+	 	 Delay Stage Set: pi = 7, dsSet = 10.0, dsReadBack = 10.0| (t-t_start) =  15.48 
+	 	 Delay Stage Set: pi = 0, dsSet = 1.0, dsReadBack = 1.0| (t-t_start) =  15.73 
+	 	 Delay Stage Set: pi = 15, dsSet = 28.0, dsReadBack = 28.0| (t-t_start) =  15.94 
+	 	 Delay Stage Set: pi = 3, dsSet = 4.0, dsReadBack = 4.0| (t-t_start) =  16.18 
+	 	 Delay Stage Set: pi = 5, dsSet = 7.0, dsReadBack = 7.0| (t-t_start) =  16.39 
+batch 4 started at 2024_06_28-19_18_51 
+set fluence = 10.0 Ko, set hwpPos = 36.79994154921453 deg, read hwpPos = 36.79994154921453 deg
+	 scan 4 (bi = 0) started at 2024_06_28-19_18_51 
+	 	 Delay Stage Set: pi = 4, dsSet = 5.0, dsReadBack = 5.0| (t-t_start) =  16.76 
+movingAverageBatch thread completed for b = 3 at 2024_06_28-19_18_51 
+	 	 Delay Stage Set: pi = 9, dsSet = 13.0, dsReadBack = 13.0| (t-t_start) =  16.98 
+	 	 Delay Stage Set: pi = 3, dsSet = 4.0, dsReadBack = 4.0| (t-t_start) =  17.22 
+	 	 Delay Stage Set: pi = 5, dsSet = 7.0, dsReadBack = 7.0| (t-t_start) =  17.46 
+	 	 Delay Stage Set: pi = 2, dsSet = 3.0, dsReadBack = 3.0| (t-t_start) =  17.71 
+	 	 Delay Stage Set: pi = 13, dsSet = 22.0, dsReadBack = 22.0| (t-t_start) =  17.93 
+	 	 Delay Stage Set: pi = 11, dsSet = 19.0, dsReadBack = 19.0| (t-t_start) =  18.17 
+	 	 Delay Stage Set: pi = 6, dsSet = 9.0, dsReadBack = 9.0| (t-t_start) =  18.39 
+	 	 Delay Stage Set: pi = 0, dsSet = 1.0, dsReadBack = 1.0| (t-t_start) =  18.61 
+	 	 Delay Stage Set: pi = 1, dsSet = 2.0, dsReadBack = 2.0| (t-t_start) =  18.84 
+	 	 Delay Stage Set: pi = 8, dsSet = 11.0, dsReadBack = 11.0| (t-t_start) =  19.08 
+	 	 Delay Stage Set: pi = 7, dsSet = 10.0, dsReadBack = 10.0| (t-t_start) =  19.31 
+	 	 Delay Stage Set: pi = 10, dsSet = 16.0, dsReadBack = 16.0| (t-t_start) =  19.54 
+	 	 Delay Stage Set: pi = 15, dsSet = 28.0, dsReadBack = 28.0| (t-t_start) =  19.77 
+	 	 Delay Stage Set: pi = 16, dsSet = 32.0, dsReadBack = 32.0| (t-t_start) =  20.01 
+	 	 Delay Stage Set: pi = 14, dsSet = 24.0, dsReadBack = 24.0| (t-t_start) =  20.23 
+	 	 Delay Stage Set: pi = 12, dsSet = 20.0, dsReadBack = 20.0| (t-t_start) =  20.46 
+batch 5 started at 2024_06_28-19_18_55 
+set fluence = 10.0 Ko, set hwpPos = 36.79994154921453 deg, read hwpPos = 36.79994154921453 deg
+	 scan 5 (bi = 0) started at 2024_06_28-19_18_55 
+	 	 Delay Stage Set: pi = 11, dsSet = 19.0, dsReadBack = 19.0| (t-t_start) =  20.83 
+movingAverageBatch thread completed for b = 4 at 2024_06_28-19_18_55 
+	 	 Delay Stage Set: pi = 16, dsSet = 32.0, dsReadBack = 32.0| (t-t_start) =  21.05 
+	 	 Delay Stage Set: pi = 13, dsSet = 22.0, dsReadBack = 22.0| (t-t_start) =  21.28 
+	 	 Delay Stage Set: pi = 12, dsSet = 20.0, dsReadBack = 20.0| (t-t_start) =  21.53 
+	 	 Delay Stage Set: pi = 15, dsSet = 28.0, dsReadBack = 28.0| (t-t_start) =  21.77 
+	 	 Delay Stage Set: pi = 9, dsSet = 13.0, dsReadBack = 13.0| (t-t_start) =  22.01 
+	 	 Delay Stage Set: pi = 3, dsSet = 4.0, dsReadBack = 4.0| (t-t_start) =  22.25 
+	 	 Delay Stage Set: pi = 8, dsSet = 11.0, dsReadBack = 11.0| (t-t_start) =  22.49 
+	 	 Delay Stage Set: pi = 14, dsSet = 24.0, dsReadBack = 24.0| (t-t_start) =  22.73 
+	 	 Delay Stage Set: pi = 4, dsSet = 5.0, dsReadBack = 5.0| (t-t_start) =  22.95 
+	 	 Delay Stage Set: pi = 0, dsSet = 1.0, dsReadBack = 1.0| (t-t_start) =  23.19 
+	 	 Delay Stage Set: pi = 10, dsSet = 16.0, dsReadBack = 16.0| (t-t_start) =  23.41 
+	 	 Delay Stage Set: pi = 5, dsSet = 7.0, dsReadBack = 7.0| (t-t_start) =  23.65 
+	 	 Delay Stage Set: pi = 7, dsSet = 10.0, dsReadBack = 10.0| (t-t_start) =  23.89 
+	 	 Delay Stage Set: pi = 1, dsSet = 2.0, dsReadBack = 2.0| (t-t_start) =  24.13 
+	 	 Delay Stage Set: pi = 2, dsSet = 3.0, dsReadBack = 3.0| (t-t_start) =  24.37 
+	 	 Delay Stage Set: pi = 6, dsSet = 9.0, dsReadBack = 9.0| (t-t_start) =  24.59 
+movingAverageBatch thread completed for b = 5 at 2024_06_28-19_18_59 

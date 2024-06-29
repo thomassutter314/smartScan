@@ -321,7 +321,7 @@ class SetupApp():
         self.displayImage = self.camImage # This can be different than the direct cam image if filters or averaging is applied.
         self.h, self.w = self.camImage.shape
         
-        self.camFig = plt.figure()
+        # ~ self.camFig = plt.figure()
         self.camFig = plt.figure(figsize=(5,8))
         self.camAx = [self.camFig.add_gridspec(top=0.75, right=0.9, hspace = 0).subplots()]
 
@@ -605,6 +605,9 @@ class SetupApp():
         scanDsPos_label = tk.Label(master=self.scanFrame,text="dsPos Scan List (mm):\n(start,end,step)",bg=cntrlBg)
         self.scanDsPosEntry = tk.Entry(master=self.scanFrame,width=largeEntryWidth)
         self.scanDsPosEntry.insert(-1,persistent_settings_dict['dsPositions'])
+        scanDsWait_label = tk.Label(master=self.scanFrame,text="ds Wait (s)",bg=cntrlBg)
+        self.scanDsWaitEntry = tk.Entry(master=self.scanFrame,width=largeEntryWidth)
+        self.scanDsWaitEntry.insert(-1,0.1)
 
         scanFluence_label = tk.Label(master=self.scanFrame,text="Fluence Scan List (Ko):\n(start,end,step)",bg=cntrlBg)
         self.scanFluenceEntry = tk.Entry(master=self.scanFrame,width=largeEntryWidth)
@@ -721,6 +724,8 @@ class SetupApp():
         scanSweepSelection_button.pack(pady=padyControls)
         scanDsPos_label.pack(pady=padyControls)
         self.scanDsPosEntry.pack(pady=padyControls)
+        scanDsWait_label.pack(pady=padyControls)
+        self.scanDsWaitEntry.pack(pady=padyControls)
         scanFluence_label.pack(pady=padyControls)
         self.scanFluenceEntry.pack(pady=padyControls)
         scanHwpWait_label.pack(pady=padyControls)
@@ -862,6 +867,7 @@ class SetupApp():
             
             # Read the user entries
             dsPositions = parsePosStr(str(self.scanDsPosEntry.get()))
+            dsWait = float(self.scanDsWaitEntry.get())
             fluences = parsePosStr(str(self.scanFluenceEntry.get()))
             hwpWait = float(self.scanHwpWaitEntry.get())
             batchSize = int(self.batchSizeEntry.get())
@@ -885,6 +891,7 @@ class SetupApp():
                             'exposure':str(self.exposureEntry.get()),\
                             'dsPositions entry':str(self.scanDsPosEntry.get()),\
                             'dsPositions_array':str(dsPositions),\
+                            'ds wait':str(self.scanDsWaitEntry.get()),\
                             'fluences entry':str(self.scanFluenceEntry.get()),\
                             'hwp_array':str(hwp_arr),\
                             'hwp wait':str(self.scanHwpWaitEntry.get()),\
@@ -912,7 +919,7 @@ class SetupApp():
             
             self.root.destroy() # Totally destroy the setup gui so we can move into the scan gui
             
-            scanapp = ScanApp(camera=self.camera,ds=self.ds,hwp=self.hwp,dsPositions=dsPositions,fluences=fluences,hwpWait=hwpWait,imalus=self.imalus,batchSize=batchSize,\
+            scanapp = ScanApp(camera=self.camera,ds=self.ds,hwp=self.hwp,dsPositions=dsPositions,fluences=fluences,hwpWait=hwpWait,dsWait=dsWait,imalus=self.imalus,batchSize=batchSize,\
                               translationCorrectionQ=tcq, scanMedianFilterQ=smfq, smartScanQ=ssq, scanDir=scanDir, rm=self.rm, scansweepselection = scansweepselection)
         else:
             print('Disconnecting camera and delay stage')
@@ -1241,7 +1248,7 @@ class SetupApp():
         self.processPrev = True # Tell the data acquisition loop that there is an image that needs processing
        
 class ScanApp():
-    def __init__(self, camera, ds, hwp, dsPositions, fluences, hwpWait, imalus, batchSize, translationCorrectionQ, scanMedianFilterQ, smartScanQ, scanDir, rm, scansweepselection, dsWait = 0.1, wait = .033):
+    def __init__(self, camera, ds, hwp, dsPositions, fluences, hwpWait, dsWait, imalus, batchSize, translationCorrectionQ, scanMedianFilterQ, smartScanQ, scanDir, rm, scansweepselection, wait = .033):
         self.camera=camera
         self.ds=ds
         self.hwp=hwp
@@ -1319,22 +1326,19 @@ class ScanApp():
         self.zeroImage = np.zeros(np.shape(initImage), dtype=self.image_dtype) # A zero image that can be used later to generate empty initial files
         
         # If translation correction is active, find the initial reference location for later comparison
-        self.tcorr_0 = np.zeros(2) # array that stores the reference position for translation correction
-        self.tcorr = np.zeros(2)
+        self.tcorr_0 = np.zeros([len(self.rm),2]) # array that stores the reference positions for translation correction
+        self.tcorr = np.zeros([len(self.rm),2])
         self.tcorr_log = np.zeros([1,2])
-        self.roiTotalArea = 0
+        self.roi_total_area = 0
         
         for ri in range(len(self.rm)):
             r = self.rm[ri]
             # Get pixel data in the roi
-            roiImage = initImage[int(r.cy-r.h/2):int(r.cy+r.h/2),int(r.cx-r.w/2):int(r.cx+r.w/2)]
-            self.roiTotalArea += roiImage.shape[0]*roiImage.shape[1]
-            # ~ tifffile.imwrite(self.scanDir + '//' + f'initialRoi_{ri}.tiff',roiImage)
+            roi_image = initImage[int(r.cy-r.h/2):int(r.cy+r.h/2),int(r.cx-r.w/2):int(r.cx+r.w/2)]
+            self.roi_total_area += roi_image.shape[0]*roi_image.shape[1]
             if self.translationCorrectionQ:
-                popt, rms, self.guess_prms = tc.fitImageToGaussian(roiImage)
-                self.tcorr_0 += popt[:2]*roiImage.shape[0]*roiImage.shape[1]
-            
-        self.tcorr_0 = self.tcorr_0/self.roiTotalArea
+                popt, rms, self.guess_prms = tc.fitImageToGaussian(roi_image)
+                self.tcorr_0[ri, :] = popt[:2]
         
         # Data display settings and variables
         self.wait = wait
@@ -1560,7 +1564,10 @@ class ScanApp():
             print(f'moving to hwpPow = {hwpPos}, fluence = {flu}, batch # = {b}')
             self.hwp.moveAbsolute(hwpPos) # Sends command to the HWP
             readHwpPos = self.hwp.getPos() # Read the half wave plate value back to compare to the send value
-            time.sleep(self.hwpWait) # Wait for hwpWait many seconds
+            
+             # If there is more than one fluence, then wait for hwpWait many seconds so that temp can stabilize
+            if len(self.fluences) > 1:
+                time.sleep(self.hwpWait)
             
             # Log batch start time
             self.runLog += f'batch {b} started at {datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")} \n'
@@ -1708,28 +1715,28 @@ class ScanApp():
         if len(self.rm) > 0:
             if self.translationCorrectionQ:
                 # Loop through all the ROIS
-                for r in self.rm:
-                    roiImage = image[int(r.cy-r.h/2):int(r.cy+r.h/2),int(r.cx-r.w/2):int(r.cx+r.w/2)]
-                    popt, rms, self.guess_prms = tc.fitImageToGaussian(roiImage,prevFit=self.guess_prms)
-                    self.tcorr += popt[:2]*roiImage.shape[0]*roiImage.shape[1]
+                for ri in range(len(self.rm)):
+                    r = self.rm[ri]
+                    roi_image = image[int(r.cy-r.h/2):int(r.cy+r.h/2),int(r.cx-r.w/2):int(r.cx+r.w/2)]
+                    popt, rms, self.guess_prms = tc.fitImageToGaussian(roi_image, prevFit = self.guess_prms)
+                    self.tcorr[ri, :] = popt[:2]
                     
-                self.tcorr = self.tcorr/self.roiTotalArea
-                correction = np.array(self.tcorr_0 - self.tcorr,dtype=np.int32)
-                self.tcorr_log = np.append(self.tcorr_log,np.array([correction]),axis=0)
-                image = np.roll(image,correction,axis=[1,0]) # Apply translation correction to the image with cylic boundaries.
-            
-            roiPixelSum = 0
+                correction = np.mean(self.tcorr_0 - self.tcorr, axis = 0)
+                self.tcorr_log = np.append(self.tcorr_log, correction[None, :], axis=0)
+                image = scipy.ndimage.shift(image, correction[::-1], mode = 'grid-wrap') # Apply translation correction to the image with cylic boundaries.
+                
+            roi_pixel_sum = 0
             for r in self.rm:
                 # Get pixel data in the roi
-                roiImage = np.array(image[int(r.cy-r.h/2):int(r.cy+r.h/2),int(r.cx-r.w/2):int(r.cx+r.w/2)],dtype='float64')                              
+                roi_image = np.array(image[int(r.cy-r.h/2):int(r.cy+r.h/2),int(r.cx-r.w/2):int(r.cx+r.w/2)],dtype='float64')                              
                 # get the sum inside all the rois and the roi total area, we will average with a normalization to area
-                roiPixelSum += np.sum(roiImage)
+                roi_pixel_sum += np.sum(roi_image)
                 
             if (s + 1) > self.roiScanData.shape[0]:
                 self.roiScanData = np.append(self.roiScanData,np.zeros([1,len(self.dsPositions)]),axis=0) # append a new scan row to the array
                 self.timeHistory = np.append(self.timeHistory,np.zeros([1,len(self.dsPositions)]),axis=0)
             
-            self.roiScanData[s,pi] = roiPixelSum/self.roiTotalArea
+            self.roiScanData[s,pi] = roi_pixel_sum/self.roi_total_area
             self.timeHistory[s,pi] = t_image - self.t_start #SCAF
                 
             self.intensityScanTime[pi] = np.mean(self.roiScanData[:,pi])
@@ -1929,16 +1936,17 @@ class ScanApp():
             
             # Save a plot showing the translation corrections
             fig, axs = plt.subplots(2)
-            if self.hardStop == True:
-                t00_sorted = t00_sorted[0:len(self.tcorr_log[1:,0])]
+
                 
             if self.translationCorrectionQ:
-                print(len(t00_sorted),len(self.tcorr_log[1:,0]))
+                if self.hardStop == True:
+                    t00_sorted = t00_sorted[0:len(self.tcorr_log[1:,0])]
+                # ~ print(len(t00_sorted),len(self.tcorr_log[1:,0]))
                 axs[0].plot(t00_sorted,self.tcorr_log[1:,0])
-                axs[0].set_ylabel('X shift)')
+                axs[0].set_ylabel('X shift')
                 axs[0].set_xlabel('Lab Time (s)')
                 axs[1].plot(t00_sorted,self.tcorr_log[1:,1])
-                axs[1].set_ylabel('Y shift)')
+                axs[1].set_ylabel('Y shift')
                 axs[1].set_xlabel('Lab Time (s)')
                 fig.suptitle(f't0={self.t_startString}')
                 

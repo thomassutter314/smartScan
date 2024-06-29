@@ -417,7 +417,9 @@ class pseudoCamera():
         Z = np.random.normal(loc = 1000, scale = 200, size = (500,500))
         # ~ Z = 1000.*np.exp(-0.5*(((X - 100)/50)**2 + ((Y-600)/80)**2))
         
-        Z += 3000.*np.exp(-0.5*(((X - 100)/50)**2 + ((Y-350)/30)**2))
+        mu_x = 200 + np.random.random()
+        mu_y = 200 + np.random.random()
+        Z += 3000.*np.exp(-0.5*(((X - mu_x)/10)**2 + ((Y - mu_y)/12)**2))
         Z += 3*np.abs(X - Y)
         
         Z[250,300] = 2**16-1

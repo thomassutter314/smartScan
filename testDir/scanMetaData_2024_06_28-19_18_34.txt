@@ -1,0 +1,14 @@
+scanStartTime:2024_06_28-19_18_34
+gain:30
+exposure:0.1
+dsPositions entry:(1,5,1)(5,10,2)(10,20,3)(20,30,4)
+dsPositions_array:[ 1.  2.  3.  4.  5.  7.  9. 10. 11. 13. 16. 19. 20. 22. 24. 28. 32.]
+ds wait:0.1
+fluences entry:[10]
+hwp_array:[36.79994155]
+hwp wait:10
+batchSize:1
+translationCorrection:1
+smartScan:0
+scansweepselection:quasi random
+directory:C:\Users\thoma\Documents\GitHub\smartScan\testDir
