@@ -2,7 +2,7 @@ import time
 import numpy as np
 import cv2
 
-TESTING = True
+TESTING = False
 
 if TESTING == False:
     import pyvisa
@@ -306,11 +306,12 @@ class Camera():
 
 class HalfWavePlate():
     def __init__(self, com = 'COM10'):
+        #COM 10 for pump
+        #COM 8 for heaterline
         self.conv = 0.00251175 # Conversion factor between device output and degrees
         self.rm = pyvisa.ResourceManager()
         self.rm.list_resources()
         self.rotationMount = self.rm.open_resource(com)
-        #COM 10 for pump
         self.rotationMount.read_termination = '\r\n'
         self.rotationMount.write_termination = '\r\n'
         print('Device status: ' + str(self.rotationMount.query('0gs')))
@@ -411,16 +412,17 @@ class pseudoCamera():
         # ~ return np.array(5000*(np.zeros([500,500]) + 1), dtype = 'uint16')
         # ~ print(self.counter)
         
-        x = np.arange(0,500,1)
-        y = np.arange(0,500,1)
-        X, Y = np.meshgrid(x, y)
-        Z = np.random.normal(loc = 1000, scale = 200, size = (500,500))
+        # ~ x = np.arange(0,500,1)
+        # ~ y = np.arange(0,500,1)
+        # ~ X, Y = np.meshgrid(x, y)
+        # ~ Z = np.random.normal(loc = 1000, scale = 200, size = (500,500))
         # ~ Z = 1000.*np.exp(-0.5*(((X - 100)/50)**2 + ((Y-600)/80)**2))
         
-        mu_x = 200 + np.random.random()
-        mu_y = 200 + np.random.random()
-        Z += 3000.*np.exp(-0.5*(((X - mu_x)/10)**2 + ((Y - mu_y)/12)**2))
-        Z += 3*np.abs(X - Y)
+        # ~ mu_x = 200 + np.random.random()
+        # ~ mu_y = 200 + np.random.random()
+        # ~ Z += 3000.*np.exp(-0.5*(((X - mu_x)/10)**2 + ((Y - mu_y)/12)**2))
+        # ~ Z += 3*np.abs(X - Y)
+        Z = np.zeros([1000,900])
         
         Z[250,300] = 2**16-1
         Z[250,250] = 2**15

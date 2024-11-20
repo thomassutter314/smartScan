@@ -1,5 +1,5 @@
-dsPositions:(1,5,1)(5,10,2)(10,20,3)(20,30,4)
-fluences:[10]
-pump_malus_A:10.14
+dsPositions:(55,60,0.1)
+fluences:[4]
+pump_malus_A:6.67
 pump_malus_phi:64.75
 pump_malus_offset:0.1

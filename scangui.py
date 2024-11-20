@@ -239,7 +239,7 @@ def readAverageMetaDataWeight(fileDir, pi, fi):
                 weight = int(metaData[l][indexWeight:])
                 return weight
 
-
+ 
 class RoiRectangle():
     def __init__(self,cx,cy,w,h,ax):
         self.cx = cx
@@ -322,19 +322,17 @@ class SetupApp():
         self.h, self.w = self.camImage.shape
         
         # ~ self.camFig = plt.figure()
-        self.camFig = plt.figure(figsize=(5,8))
-        self.camAx = [self.camFig.add_gridspec(top=0.75, right=0.9, hspace = 0).subplots()]
+        self.camFig = plt.figure(figsize=(12,10))
+        self.camAx = [self.camFig.add_gridspec(top=0.75, right=0.9, hspace = 0).subplots()] 
+        # ~ self.camAx = [self.camFig.add_gridspec.subplots()]
 
         self.camAx.append(self.camAx[0].inset_axes([0, 1.05, 1, 0.25], sharex=self.camAx[0]))
-
-        self.camAx[0].set_xticks([])
-        self.camAx[0].set_yticks([])
         
         # Connect to the delay stage
         self.ds = lab_instruments.DelayStage()
         
         # Connect to the half wave plate
-        self.hwp = lab_instruments.HalfWavePlate()
+        self.hwp = lab_instruments.HalfWavePlate(com = 'COM10') # COM10 is pump, COM8 is heaterline
         
         # Data display settings and variables
         self.wait = wait
@@ -800,7 +798,7 @@ class SetupApp():
         
         # Plot the cam image and the line profile crosshairs
         self.camImageObj = self.camAx[0].imshow(self.camImage)
-        self.lineProfilePlot_h, = self.camAx[1].plot(self.displayImage[:,self.displayImage.shape[1]//2])
+        self.lineProfilePlot_h, = self.camAx[1].plot(self.displayImage[self.displayImage.shape[0]//2,:])
         self.updateLineProfilePlot()
         
         # Connect the cam figure to key press events
@@ -946,23 +944,27 @@ class SetupApp():
                     self.lineProfile_x2, self.lineProfile_y2 = delta_x + self.lineProfile_x1, delta_y + self.lineProfile_y1
                     
                     # Set the center position for the horizontal line
-                    self.lineProfile_h.set_xy1(x=self.lineProfile_x1, y=self.lineProfile_y1)
+                    # ~ self.lineProfile_h.set_xy1(x=self.lineProfile_x1, y=self.lineProfile_y1)
+                    self.lineProfile_h._xy1 = (self.lineProfile_x1, self.lineProfile_y1)
                     
                     # Set the 2nd position of the horizontal line 
-                    self.lineProfile_h.set_xy2(x=self.lineProfile_x2, y=self.lineProfile_y2)
+                    # ~ self.lineProfile_h.set_xy2(x=self.lineProfile_x2, y=self.lineProfile_y2)
+                    self.lineProfile_h._xy2 = (self.lineProfile_x2, self.lineProfile_y2)
                     
                     # Set the center position for the vertical line in both upper and lower plots
-                    self.lineProfile_v.set_xy1(x=self.lineProfile_x1, y=self.lineProfile_y1)
+                    # ~ self.lineProfile_v.set_xy1(x=self.lineProfile_x1, y=self.lineProfile_y1)
+                    self.lineProfile_v._xy1 = (self.lineProfile_x1, self.lineProfile_y1)
                     self.lineProfile_upper_v.set_xdata([self.lineProfile_x1])
 
                 if event.button == 3:
                     if (self.lineProfile_x1 != event.xdata or self.lineProfile_y1 != event.ydata):
                         self.lineProfile_x2, self.lineProfile_y2 = event.xdata, event.ydata
-                        self.lineProfile_h.set_xy2(x=self.lineProfile_x2, y=self.lineProfile_y2)
+                        # ~ self.lineProfile_h.set_xy2(x=self.lineProfile_x2, y=self.lineProfile_y2)
+                        self.lineProfile_h._xy2 = (self.lineProfile_x2, self.lineProfile_y2)
                                      
                 # Keep the vertical line vertical
-                self.lineProfile_v.set_xy2(x=self.lineProfile_x1, y=self.lineProfile_y1 - 1)
-                                           
+                # ~ self.lineProfile_v.set_xy2(x=self.lineProfile_x1, y=self.lineProfile_y1 - 1)
+                self.lineProfile_v._xy2 = (self.lineProfile_x1, self.lineProfile_y1 - 1)               
 
                 self.updateLineProfilePlot()
 
