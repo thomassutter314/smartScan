@@ -183,13 +183,13 @@ def fitImageToGaussian(pixelData, preliminaryScanNumber = [20,20], returnGuessPa
     # Hard physical and mathematical boundaries on the fit parameters
     
     if pixelData.dtype == np.uint8:
-        bounds_prms = ([0,0,0,0,0,0,-np.pi/2],[w,h,sci.inf,sci.inf,2**8,2**8,np.pi/2])
+        bounds_prms = ([0,0,0,0,0,0,-np.pi/2],[w,h,np.inf,np.inf,2**8,2**8,np.pi/2])
     if pixelData.dtype == np.uint16:
-        bounds_prms = ([0,0,0,0,0,0,-np.pi/2],[w,h,sci.inf,sci.inf,2**16,2**16,np.pi/2])
+        bounds_prms = ([0,0,0,0,0,0,-np.pi/2],[w,h,np.inf,np.inf,2**16,2**16,np.pi/2])
     if pixelData.dtype == np.uint32 or pixelData.dtype == np.float32:
-        bounds_prms = ([0,0,0,0,0,0,-np.pi/2],[w,h,sci.inf,sci.inf,2**32,2**32,np.pi/2])
+        bounds_prms = ([0,0,0,0,0,0,-np.pi/2],[w,h,np.inf,np.inf,2**32,2**32,np.pi/2])
     if pixelData.dtype == np.uint64 or pixelData.dtype == np.float64:
-        bounds_prms = ([0,0,0,0,0,0,-np.pi/2],[w,h,sci.inf,sci.inf,2**64,2**64,np.pi/2])
+        bounds_prms = ([0,0,0,0,0,0,-np.pi/2],[w,h,np.inf,np.inf,2**64,2**64,np.pi/2])
 
     # The two-dimensional domain of the fit.
     X, Y = np.meshgrid(X_ROI, Y_ROI)
