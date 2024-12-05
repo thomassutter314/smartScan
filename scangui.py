@@ -324,8 +324,8 @@ class SetupApp():
         self.h, self.w = self.camImage.shape
         
         # ~ self.camFig = plt.figure()
-        # ~ self.camFig = plt.figure(figsize=(12,10))
-        self.camFig = plt.figure(figsize=(8,10))
+        self.camFig = plt.figure(figsize=(12,10))
+        # ~ self.camFig = plt.figure(figsize=(8,10))
         self.camAx = [self.camFig.add_gridspec(top=0.75, right=0.9, hspace = 0).subplots()] 
         # ~ self.camAx = [self.camFig.add_gridspec.subplots()]
 
@@ -1203,7 +1203,7 @@ class SetupApp():
                     self.t0 = time.time()
                 newPointSwitch = False
             else:
-                t_rem = self.exposure - (time.time() - t_open) # amount of time remaining in exposure
+                t_rem = 0.7*self.exposure - (time.time() - t_open) # amount of time remaining in exposure
                 N = int(30*t_rem) # 30 frames per second
                 if N >= 4:
                     # Waits here while updating the progress bar
@@ -1615,7 +1615,7 @@ class ScanApp():
                 
                 ### Start a new scan ###
                 for p in range(len(self.dsPositions)):
-                    print(time.time(),' ',osprocess.memory_info().rss / 2 ** 20) # Print this to check for memory leaks
+                    # ~ print(time.time(),' ',osprocess.memory_info().rss / 2 ** 20) # Print this to check for memory leaks
                     pi = piList[p]
                     dsPos = self.dsPositions[pi]
                     

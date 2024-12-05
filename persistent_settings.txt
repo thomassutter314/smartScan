@@ -1,9 +1,9 @@
-dsPositions:(55,60,1)
-fluences:[4]
+dsPositions:(57.3,57.9,0.1)(57.9,58.1,0.02)(58.1,58.3,0.05)
+fluences:[4.00]
 dsWait:0.2
 hwpWait:3.0
 batchSize:5
-scanSweepSelection:back and forth
+scanSweepSelection:quasi random
 tcq:True
 smfq:True
 ssq:False
