@@ -1,14 +1,16 @@
 import time
 import numpy as np
+import matplotlib.pyplot as plt
 import cv2
 
 TESTING = False
 
 if TESTING == False:
     import pyvisa
-    import PySpin
+    # ~ import PySpin
+    import AtikSDK
     import clr
-    from clr import System
+    # ~ from clr import System
     full_filename = r'C:\Windows\Microsoft.NET\assembly\GAC_64\Newport.DLS.CommandInterface\v4.0_1.0.1.0__90ac4f829985d2bf\Newport.DLS.CommandInterface.dll'
     clr.AddReference(full_filename)
     from CommandInterfaceDLS import *
@@ -16,10 +18,13 @@ else:
     print('TESTING = True')
 
 
+import utils
+
+
 class DelayStage():    
-    def __init__(self):
+    def __init__(self, com = 'COM3'):
         #import System
-        instrument = "COM11"
+        instrument = com
         self.myDLS = DLS()
         result = self.myDLS.OpenInstrument(instrument)
         print('OpenInstrument error status (0 is success): ', result)
@@ -27,7 +32,6 @@ class DelayStage():
         self.pos, self.errorStatus = 0, ''
         self.pos = self.myDLS.PA_Get(self.pos, self.errorStatus)[1]
         print('pos = %s' % str(self.pos))
-   
     def disconnect(self):
         # Close the instrument
         result = self.myDLS.CloseInstrument()
@@ -46,7 +50,7 @@ class DelayStage():
         else:
             print('Invalid Input Position; DS motion denied')
 
-class Camera():
+class BlackFlyCamera():
     def __init__(self):        
         # Total number of buffers
         NUM_BUFFERS = 3
@@ -304,8 +308,79 @@ class Camera():
         except:
             return False
 
+class AtikCamera():
+    def __init__(self):
+        self.cam = AtikSDK.AtikSDKCamera()
+        
+        while(self.cam.is_device_present(0) == False):
+            time.sleep(1)
+            
+        self.cam.connect()
+        
+        self.cam.set_binning(binX = 4, binY = 4)
+        
+        api_version = self.cam.get_api_version()
+        print("API version is: ", api_version)
+        
+        properties = self.cam.get_properties()
+        print("Camera properties:", properties)
+    
+        serial = self.cam.get_serial_str()
+        print("Camera serial:", serial)
+        
+        print("Exposure speed:",self.cam.get_exposure_speed())
+    
+        fx3, fpga = self.cam.get_firmware_versions()
+        print(f"FX3 version: {fx3}, FPGA version: {fpga}")
+    
+        temp = self.getTemp()
+        print("Temperature °C:", temp)
+        
+        print("Cooling info:",self.cam.cooling_info())
+
+        #Get the current gain and offset, then set.
+        gainOffset = self.cam.get_gain_offset()
+        print(f"Current Gain: {gainOffset[0]}, Current Offset: {gainOffset[1]}")  
+        
+        print(f"Cam has fast mode: {self.cam.has_fast_mode()}")
+    
+    # ~ @utils.func_timer    
+    def takeImage(self, exposure_time):
+        # exposure time in s
+        
+        # ~ image = self.cam.take_image(self.exposure)
+        self.cam.start_exposure(exposure_time) # start exposing the camera, returns immediately
+        time.sleep(exposure_time) # wait for the exposure time
+        
+        
+        while not self.cam.image_ready():
+            # ~ print(self.cam.download_percent())
+            print(self.cam.camera_state(), type(self.cam.camera_state()))
+            time.sleep(0.1)
+            
+        image = self.cam.get_image()
+        
+        return image
+    
+    def getTemp(self):
+        temp = self.cam.get_temperature()
+        return temp
+    
+    def getCoolingPower(self):
+        return self.cam.cooling_info()[1]
+    
+    def startCooler(self):
+        self.cam.set_cooling(target_temp = 5.0) # target temp is the target in degrees centigrade
+        
+    def stopCooler(self):
+        self.cam.cooler_warmup()
+    
+    def disconnect(self):
+        self.cam.disconnect()
+        AtikSDK.ArtemisShutdown()
+
 class HalfWavePlate():
-    def __init__(self, com = 'COM10'):
+    def __init__(self, com = 'COM4'):
         #COM 10 for pump
         #COM 8 for heaterline
         self.conv = 0.00251175 # Conversion factor between device output and degrees
@@ -369,7 +444,7 @@ class HayearCamera():
         self.cap.release()
         
 class pseudoDelayStage():
-    def __init__(self):
+    def __init__(self, com):
         print('This is a pseudo Delay Stage for testing')
         self.pos = 0
     def disconnect(self):
@@ -382,7 +457,7 @@ class pseudoDelayStage():
         else:
             print('Invalid Input Position; DS motion denied')
 
-class pseudoCamera():
+class pseudoBlackFlyCamera():
     def __init__(self):
         self.triggerTimer = time.time()
         self.triggered = False
@@ -453,6 +528,26 @@ class pseudoCamera():
     def setGain(self,setValue):
         self.pseudoGain = setValue
 
+class pseudoAtikCamera():
+    def __init__(self):
+        self.exposure = 3 # in seconds
+    
+    # ~ @utils.func_timer    
+    def takeImage(self, exposure_time):
+        image = 1000*np.random.random([100, 100])
+        image = np.array(image, dtype = 'uint16')
+        
+        return image
+    
+    def getTemp(self):
+        return np.random.random() + 25
+    
+    def getCoolingPower(self):
+        return np.random.random() + 25
+
+    def disconnect(self):
+        pass
+
 class pseudoHalfWavePlate():
     def __init__(self, com):
         print('This is a pseudo half wave plate for testing')
@@ -476,12 +571,29 @@ class pseudoHayearCamera():
     def disconnect(self):
         print('disconnect psuedo hayear cam')
 
-HayearCamera = pseudoHayearCamera
+
 if TESTING == True:
     # In test mode we redefine these classes as test objects that don't connect to anything
-    Camera = pseudoCamera
+    AtikCamera = pseudoAtikCamera
+    BlackFlyCamera = pseudoBlackFlyCamera
     DelayStage = pseudoDelayStage
     HalfWavePlate = pseudoHalfWavePlate
-    HayearCamera = pseudoHayearCamera
+    
+
+
+HayearCamera = pseudoHayearCamera
+# ~ HalfWavePlate = pseudoHalfWavePlate
+# ~ AtikCamera = pseudoAtikCamera
+    
+    
+if __name__ == '__main__':
+    cam = AtikCamera()
+    
+    # ~ image = cam.grabImage()
+    # ~ image = cam.grabImage()
+    # ~ image = cam.grabImage()
+    # ~ image = cam.grabImage()
+    
+    cam.disconnect()
 
 

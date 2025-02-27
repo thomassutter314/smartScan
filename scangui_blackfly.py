@@ -308,12 +308,15 @@ class SetupApp():
         self.root.iconbitmap("kogar_0.ico")
         #self.root.iconify()
         
-        # Initialize camera
-        self.camera = lab_instruments.Camera()
-        self.exposure = 1
+
+        self.camera = lab_instruments.BlackFlyCamera()
         self.gain = 30
-        self.camera.setExposure(self.exposure)
         self.camera.setGain(self.gain)
+            
+            
+        self.exposure = 1
+        self.camera.setExposure(self.exposure)
+        
         time.sleep(0.5)
         self.camSettingsUpdateInProgress = False
         
@@ -332,10 +335,10 @@ class SetupApp():
         self.camAx.append(self.camAx[0].inset_axes([0, 1.05, 1, 0.25], sharex=self.camAx[0]))
         
         # Connect to the delay stage
-        self.ds = lab_instruments.DelayStage()
+        self.ds = lab_instruments.DelayStage(com = 'COM3')
         
         # Connect to the half wave plate
-        self.hwp = lab_instruments.HalfWavePlate(com = 'COM10') # COM10 is pump, COM8 is heaterline
+        self.hwp = lab_instruments.HalfWavePlate(com = 'COM4') # COM4 is pump, COM5 is heaterline
         
         # Data display settings and variables
         self.wait = wait

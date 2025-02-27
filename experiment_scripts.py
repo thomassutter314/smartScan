@@ -6,6 +6,7 @@ import datetime
 import os
 import tifffile
 
+
 def fluenceScan(dsPosList, hwpPosList, exposure, gain, scanDir, dsWait = 0.5, hwpWait = 1, loopsPerHwpPos = 3):
     scanLive = True
     # Initialize camera
