@@ -242,6 +242,8 @@ def readAverageMetaDataWeight(fileDir, pi, fi):
                 weight = int(metaData[l][indexWeight:])
                 return weight
 
+def stdev_weighted(x, weights, axis):
+    return np.sqrt(np.average(x**2, weights = weights, axis = axis) - np.average(x, weights = weights, axis = axis)**2)
  
 class RoiRectangle():
     def __init__(self,cx,cy,w,h,ax):
@@ -288,15 +290,15 @@ class RoiRectangle():
         self.patch = patches.Rectangle((tl_x, tl_y), self.w, self.h, linewidth=1, edgecolor='r', facecolor='none', alpha=0.8)
         ax.add_patch(self.patch) # Add the patch to the axis
 
-class SetupApp():
-    def __init__(self, wait = .033, cam = 'atik'):
+class GUI():
+    def __init__(self):
         # Load the persistent_settings
         self.persistent_settings_dict = {}
         with open('persistent_settings.txt','r') as f:
             for line in f:
                 if line[:line.find(":")] != '#':
                     self.persistent_settings_dict[line[:line.find(":")]] = line[line.find(":")+1:].replace('\n','')
-        
+          
         # Define the pump malus curve
         self.imalus = lambda x: data_analysis.malusFunc(x, float(self.persistent_settings_dict['pump_malus_A']), float(self.persistent_settings_dict['pump_malus_phi']), float(self.persistent_settings_dict['pump_malus_offset']),invert=True)
         self.malus = lambda x: data_analysis.malusFunc(x, float(self.persistent_settings_dict['pump_malus_A']), float(self.persistent_settings_dict['pump_malus_phi']), float(self.persistent_settings_dict['pump_malus_offset']),invert=False)
@@ -306,37 +308,30 @@ class SetupApp():
         self.root.geometry("1000x700")
         self.root.configure(bg='white')
         self.root.wm_title("Smart Scan")
-        
         self.root.iconbitmap("kogar_0.ico")
-        #self.root.iconify()
         
-        # Initialize camera
-        self.camera = lab_instruments.AtikCamera()
-     
-        self.exposure = 1 # time in s
+        # Connect to I/O devices
+        self.connect_devices()
         
-        time.sleep(0.5)
-        self.camSettingsUpdateInProgress = False
+        # Create intensity history arrays for data plots
+        self.resetHistory = False
+        self.resetLongHistory = False
+        self.intensityHistory = []
+        self.avgIntensity = np.array([0], dtype='float')
+        self.avgIntensity_dsPos = np.array([self.ds.getPos()], dtype='float')
+        self.stdIntensity = np.array([0], dtype='float')
+        self.dataTimes = []
+        self.t0 = time.time()
+        self.t1 = self.t0
         
-        # take a sample image
-        self.collectImage() #self.camImage = self.camera.takeImage()
-        self.displayImage = self.camImage # This can be different than the direct cam image if filters or averaging is applied.
-        self.h, self.w = self.camImage.shape
-        
-        # Connect to the delay stage
-        self.ds = lab_instruments.DelayStage(com = 'COM3')
-        
-        # Connect to the half wave plate
-        self.hwp = lab_instruments.HalfWavePlate(com = 'COM4') # COM4 is pump, COM5 is heaterline
-        
-        # Formatting stuff
-        if True:
+        formatting = True
+        if formatting:
             self.camFig = plt.figure(figsize=(12,10))
             self.camAx = [self.camFig.add_gridspec(top=0.75, right=0.9, hspace = 0).subplots()] 
             self.camAx.append(self.camAx[0].inset_axes([0, 1.05, 1, 0.25], sharex=self.camAx[0]))
                 
             # Data display settings and variables
-            self.wait = wait
+            self.wait = 0.033
             self.ppw = 100
             self.rm = [] # list of rois
             self.roiActive = False
@@ -351,20 +346,10 @@ class SetupApp():
             buttonWidth = 16
             cntrlBg = '#2F8D35'
         
-            # Create intensity history arrays for data plots
-            self.resetHistory = False
-            self.resetLongHistory = False
-            self.intensityHistory = []
-            self.avgIntensity = np.array([0],dtype='float')
-            self.stdIntensity = np.array([0],dtype='float')
-            self.timeHistory = []
-            self.t0 = time.time()
-            self.t1 = self.t0
-        
             # global variables for mouse location
             self.mouse_x = 0
             self.mouse_y = 0
-
+        
             # Make a Tkinter frame for the detector
             self.detectorFrame = tk.Frame(master=self.root, width=0, height=0, padx=0, pady=0, bg=cntrlBg)
             self.detectorFrame.pack(side=tk.LEFT)
@@ -380,6 +365,12 @@ class SetupApp():
             # Make a Tkinter frame for the data plots
             self.dataFrame = tk.Frame(master=self.root, width=0, height=0, padx=0, pady=0)
             self.dataFrame.pack(side=tk.LEFT)
+            
+            # make a label to state whether we are in setup phase or scan phase
+            self.appstate_label_string = tk.StringVar()
+            self.appstate_label_string.set('State: Setup')
+            self.appstate_label = tk.Label(master = self.controls, textvariable =  self.appstate_label_string, bg=cntrlBg, font=("Arial", 14, "bold")) 
+            self.appstate_label.config(bg="gray") 
                 
             # This is the GUI controls section
             # Adding the ROI controls
@@ -400,7 +391,7 @@ class SetupApp():
             self.cursor_intensity_label_string = tk.StringVar()
             self.cursor_intensity_label_string.set('pixel value = 0')
             self.cursor_intensity_label = tk.Label(master=self.controls,textvariable=self.cursor_intensity_label_string, bg=cntrlBg)
-
+        
             # Adding the camera controls
             self.saveImageButton = tk.Button(
                 master=self.controls,
@@ -448,7 +439,7 @@ class SetupApp():
                     ces = '%.2f' % self.exposure
                     self.exposureEntry.insert(-1,ces)
                 
-    
+        
                 print('Updating Camera Settings')
                 ces = '%.2f' % self.exposure
                 self.exposure_label_string.set(f'Exposure = {ces} s')
@@ -477,13 +468,16 @@ class SetupApp():
                 dps = '%.2f' % self.ds.getPos()
                 self.currentDsPos_label_string.set(f'dsPos = {dps}')
             
-    
             # Adding the hwp pump controls
             self.currentFluence_label_string = tk.StringVar()
             currentHwpAngle = self.hwp.getPos()
             cfs = '%.2f' % self.malus(currentHwpAngle)
             self.currentFluence_label_string.set(f'Fluence = {cfs} Ko')
             self.currentFluence_label = tk.Label(master=self.controls,textvariable=self.currentFluence_label_string,bg=cntrlBg)
+            
+            frs_2 = '%.2f' % (float(self.persistent_settings_dict['pump_malus_A']) + float(self.persistent_settings_dict['pump_malus_offset']))
+            frs_1 = '%.2f' % float(self.persistent_settings_dict['pump_malus_offset'])
+            self.fluenceRange_label = tk.Label(master=self.controls,text=f'Range: [{frs_1}, {frs_2}] Ko',bg=cntrlBg)
             
             self.currentHwpPos_label_string = tk.StringVar()
             chs = '%.2f' % currentHwpAngle
@@ -517,7 +511,7 @@ class SetupApp():
                 chs = '%.2f' % currentHwpAngle
                 self.currentFluence_label_string.set(f'Fluence = {cfs} Ko')
                 self.currentHwpPos_label_string.set(f'HWP Angle = {chs} deg')
-    
+        
             hwp1_label = tk.Label(master=self.controls,text="HWP Angle (deg)",bg=cntrlBg)
             self.hwp1Entry = tk.Entry(master=self.controls,width=entryWidth)
             
@@ -540,12 +534,12 @@ class SetupApp():
                 chs = '%.2f' % currentHwpAngle
                 self.currentFluence_label_string.set(f'Fluence = {cfs} Ko')
                 self.currentHwpPos_label_string.set(f'HWP Angle = {chs} deg')
-    
+        
             # Adding the data plot controls
             def newPointButtonFunc():
                 if self.resetHistory == False:
                     self.resetHistory = True
-                    self.newPointButton.config(text='Continue',bg='yellow')
+                    self.newPointButton.config(text='New Point',bg='yellow')
                 else:
                     self.resetHistory = False
                     self.newPointButton.config(text='New Point',bg='white')
@@ -559,8 +553,9 @@ class SetupApp():
                 if fileLoc == None:
                     return None
                 # Your list of lists
-                listOlists = [['timeHistory'] + list(self.timeHistory),
+                listOlists = [['dataTimes'] + list(self.dataTimes),
                               ['intensityHistory'] + list(self.intensityHistory),
+                              ['avgIntensity_dsPos'] + list(self.avgIntensity_dsPos),
                               ['avgIntensity'] + list(self.avgIntensity),
                               ['stdIntensity'] + list(self.stdIntensity)]
                 
@@ -615,7 +610,7 @@ class SetupApp():
             scanDsWait_label = tk.Label(master=self.scanFrame,text="ds Wait (s)",bg=cntrlBg)
             self.scanDsWaitEntry = tk.Entry(master=self.scanFrame,width=largeEntryWidth)
             self.scanDsWaitEntry.insert(-1,self.persistent_settings_dict['dsWait'])
-
+        
             scanFluence_label = tk.Label(master=self.scanFrame,text="Fluence Scan List (Ko):\n(start,end,step)",bg=cntrlBg)
             self.scanFluenceEntry = tk.Entry(master=self.scanFrame,width=largeEntryWidth)
             self.scanFluenceEntry.insert(-1,self.persistent_settings_dict['fluences'])
@@ -646,11 +641,10 @@ class SetupApp():
                 fg='black', bg='white',
                 command=self.startScan)
             
-            
             self.scanProgress_label_string = tk.StringVar()
             self.scanProgress_label_string.set(f'Scan Progress = N/A')
             self.scanProgress_label = tk.Label(master=self.scanFrame,textvariable= self.scanProgress_label_string,bg=cntrlBg)
-
+        
             self.scanNumber_label_string = tk.StringVar()
             self.scanNumber_label_string.set(f"Scan # = N/A")
             self.scanNumber_label = tk.Label(master=self.scanFrame,textvariable=self.scanNumber_label_string,bg=cntrlBg)
@@ -707,7 +701,6 @@ class SetupApp():
                 fg='black', bg='white',
                 command=hardStopButtonFunc)
         
-            
             # Add a image progress bar
             self.imProgBar = ttk.Progressbar(master=self.controls,length=140)
             
@@ -744,6 +737,8 @@ class SetupApp():
                 command=imageSetButtonFunc)
             
             # Pack controls
+            self.appstate_label.pack(pady=padyControls)
+            tk.Frame(master=self.controls, bd=100, relief='flat',height=sepHeight,width=sepWidth,bg='black').pack(side='top', pady=padySep)
             add_roi_button.pack(pady=padyControls)
             self.roi_number_label.pack(pady=padyControls)
             self.cursor_xycoord_label.pack(pady=padyControls)
@@ -763,14 +758,13 @@ class SetupApp():
             dsPos2_label.pack(pady=padyControls)
             self.dsPos2Entry.pack(pady=padyControls)
             tk.Frame(master=self.controls, bd=100, relief='flat',height=sepHeight,width=sepWidth,bg='black').pack(side='top', pady=padySep)
+            self.fluenceRange_label.pack(pady=padyControls)
             self.currentFluence_label.pack(pady=padyControls)
             self.currentHwpPos_label.pack(pady=padyControls)
             fluence1_label.pack(pady=padyControls)
             self.fluence1Entry.pack(pady=padyControls)
-            
             hwp1_label.pack(pady=padyControls)
             self.hwp1Entry.pack(pady=padyControls)
-        
             tk.Frame(master=self.controls, bd=100, relief='flat',height=sepHeight,width=sepWidth,bg='black').pack(side='top', pady=padySep)
             self.newPointButton.pack(pady=padyControls)
             self.clearDataButton.pack(pady=padyControls)
@@ -781,7 +775,6 @@ class SetupApp():
             self.avgDirLocEntry.pack(pady=padyControls)
             self.imageSetButton.pack(pady=padyControls)
             # ~ tk.Frame(master=self.controls, bd=100, relief='flat',height=sepHeight,width=sepWidth,bg='black').pack(side='top', pady=padySep)
-            
             scanSweepSelection_label.pack()
             scanSweepSelection_button.pack(pady=padyControls)
             scanDsPos_label.pack(pady=padyControls)
@@ -807,8 +800,33 @@ class SetupApp():
             self.pauseScanButton.pack(pady=padyControls)
             self.gentleStopButton.pack(pady=padyControls)
             self.hardStopButton.pack(pady=padyControls)
-        
-            # Build sliders for adjusting the brightness and contrast of the image
+            
+            # Make the line profile crosshairs
+            self.lineProfile_x1 = self.w//2
+            self.lineProfile_y1 = self.h//2
+            
+            # 2nd point te line profile crosses through
+            self.lineProfile_x2 = self.lineProfile_x1 + 1
+            self.lineProfile_y2 = self.lineProfile_y1
+            
+            # ~ self.lineProfile_h = self.camAx[0].axhline(y=self.lineProfile_y,c='black')
+            self.lineProfile_v = self.camAx[0].axline((self.lineProfile_x1, self.lineProfile_y1),
+                                (self.lineProfile_x1-(self.lineProfile_y2 - self.lineProfile_y1), self.lineProfile_y1 + (self.lineProfile_x2 - self.lineProfile_x1)),
+                                c='black', linestyle = 'dashed', alpha = 0.75)
+            self.lineProfile_upper_v = self.camAx[1].axvline(x = self.lineProfile_x1, c='black', linestyle = 'dashed', alpha = 0.75)
+            self.lineProfile_h = self.camAx[0].axline((self.lineProfile_x1, self.lineProfile_y1), (self.lineProfile_x2, self.lineProfile_y2), c='black', alpha = 0.75)
+            
+            # Plot the cam image and the line profile crosshairs
+            self.camImageObj = self.camAx[0].imshow(self.camImage)
+            self.lineProfilePlot_h, = self.camAx[1].plot(self.displayImage[self.displayImage.shape[0]//2,:], c = 'green')
+            self.updateLineProfilePlot()
+            
+            # ConnPauseect the cam figure to key press events
+            self.camFig.canvas.mpl_connect('button_press_event', self.camonclick)
+            self.camFig.canvas.mpl_connect('scroll_event', self.camonscroll)
+            self.camFig.canvas.mpl_connect('motion_notify_event', self.camonmove)
+            
+            # Build sliders for adjusting the brightness and contrast of the image, do not move to formatting, this must be in __init__ for it work
             ax_setVals = [plt.axes([0.15, 0.06, 0.5, 0.02]), plt.axes([0.15, 0.02, 0.5, 0.02])]
             
             # Check whether the image is 8bit or 16bit
@@ -822,7 +840,7 @@ class SetupApp():
                 print(f'Invalid Image Type: {type(self.camImage[0,0])}')
                 
             imageCurrentMin, imageCurrentMax = np.min(self.camImage), np.max(self.camImage)
-     
+        
             slider_vmax = matplotlib.widgets.Slider(ax_setVals[0], r'$v_{max}$', imageTypeMin, imageTypeMax, valinit=imageCurrentMax)
             slider_vmin = matplotlib.widgets.Slider(ax_setVals[1], r'$v_{min}$', imageTypeMin, imageTypeMax, valinit=imageCurrentMin)
             def sliderUpdateVmax(val):
@@ -838,29 +856,7 @@ class SetupApp():
             slider_vmax.on_changed(sliderUpdateVmax)
             slider_vmin.on_changed(sliderUpdateVmin)
             
-            # Make the line profile crosshairs
-            self.lineProfile_x1 = self.w//2
-            self.lineProfile_y1 = self.h//2
-            
-            # 2nd point te line profile crosses through
-            self.lineProfile_x2 = self.lineProfile_x1 + 1
-            self.lineProfile_y2 = self.lineProfile_y1
-            
-            # ~ self.lineProfile_h = self.camAx[0].axhline(y=self.lineProfile_y,c='black')
-            self.lineProfile_v = self.camAx[0].axline((self.lineProfile_x1, self.lineProfile_y1), (self.lineProfile_x1-(self.lineProfile_y2 - self.lineProfile_y1), self.lineProfile_y1 + (self.lineProfile_x2 - self.lineProfile_x1)), c='black', linestyle = 'dashed')
-            self.lineProfile_upper_v = self.camAx[1].axvline(x = self.lineProfile_x1, c='black', linestyle = 'dashed')
-            self.lineProfile_h = self.camAx[0].axline((self.lineProfile_x1, self.lineProfile_y1), (self.lineProfile_x2, self.lineProfile_y2), c='black')
-            
-            # Plot the cam image and the line profile crosshairs
-            self.camImageObj = self.camAx[0].imshow(self.camImage)
-            self.lineProfilePlot_h, = self.camAx[1].plot(self.displayImage[self.displayImage.shape[0]//2,:])
-            self.updateLineProfilePlot()
-            
-            # ConnPauseect the cam figure to key press events
-            self.camFig.canvas.mpl_connect('button_press_event', self.camonclick)
-            self.camFig.canvas.mpl_connect('scroll_event', self.camonscroll)
-            self.camFig.canvas.mpl_connect('motion_notify_event', self.camonmove)
-    
+        
             # Attach the matplotlib image figures to a tkinter gui window
             self.canvas = FigureCanvasTkAgg(self.camFig, master=self.detectorFrame)
             # ~ self.toolbar = NavigationToolbar2Tk(self.canvas, self.root)
@@ -870,13 +866,19 @@ class SetupApp():
             self.label.pack()
         
             # Create the data plot
-            self.dataFig, self.dataAx = plt.subplots(2,1,figsize=(4, 6))
+            self.dataFig, self.dataAx = plt.subplots(3, 1, figsize=(4, 10))
             self.dataFig.subplots_adjust(left=0.2, hspace=0.4)
             self.liveIntensityPlot, = self.dataAx[0].plot([],[],'go-') # live intensity plot
             self.dataAx[0].set_xlabel('Time (s)')
-            self.avgIntensityPlot = self.dataAx[1].errorbar(range(len(self.avgIntensity)),self.avgIntensity,self.stdIntensity,\
-                                                            marker='o',color='green',elinewidth=1,capsize=5) # average intensiity plot with error bars at 1 sigma
+           
+            self.avgIntensityPlot = self.dataAx[1].errorbar(range(len(self.avgIntensity)), self.avgIntensity, self.stdIntensity,\
+                                    marker='o',color='green',elinewidth=1,capsize=5) # average intensiity plot with error bars at 1 sigma
             self.dataAx[1].set_xlabel('Data Point #')
+            
+            
+            self.avgIntensity_dsPosPlot = self.dataAx[2].errorbar(self.avgIntensity_dsPos, self.avgIntensity, self.stdIntensity,\
+                                    marker='o',color='green',linestyle='none',capsize=5) # average intensiity plot with error bars at 1 sigma
+            self.dataAx[2].set_xlabel('dsPosition (mm)')
             
             # Attach the matplotlib data figures to a tkinter gui window
             self.datacanvas = FigureCanvasTkAgg(self.dataFig, master=self.dataFrame)
@@ -885,25 +887,73 @@ class SetupApp():
             self.datacanvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
             self.datalabel = tk.Label(text="")
             self.datalabel.pack()
-        
-                
-        def userPressReturn(event):
-            entry = self.root.focus_get() # Get the entry that the user has selected
-            if entry == self.exposureEntry:
-                camSettingsButtonFunc()
-            if entry == self.dsPos1Entry:
-                dsPos1ButtonFunc()
-            if entry == self.dsPos2Entry:
-                dsPos2ButtonFunc()
-            if entry == self.fluence1Entry:
-                fluence1ButtonFunc()
-            if entry == self.hwp1Entry:
-                hwp1ButtonFunc()
-        # Bind the enter key to activate selected entry
-        self.root.bind('<Return>', userPressReturn)
-        
-        
-        def on_closing():
+            
+            def userPressReturn(event):
+                entry = self.root.focus_get() # Get the entry that the user has selected
+                if entry == self.exposureEntry:
+                    camSettingsButtonFunc()
+                if entry == self.dsPos1Entry:
+                    dsPos1ButtonFunc()
+                if entry == self.dsPos2Entry:
+                    dsPos2ButtonFunc()
+                if entry == self.fluence1Entry:
+                    fluence1ButtonFunc()
+                if entry == self.hwp1Entry:
+                    hwp1ButtonFunc()
+            # Bind the enter key to activate selected entry
+            self.root.bind('<Return>', userPressReturn)
+            
+            # make a list of gui objects that should be disabled in setup phase or scan phase
+            self.setup_disabled_ui_list = [self.pauseScanButton,
+                                           self.gentleStopButton,
+                                           self.hardStopButton]
+            self.scan_disabled_ui_list = [self.exposureEntry,
+                                          self.saveImageButton,
+                                          self.dsPos1Entry,
+                                          self.dsPos2Entry,
+                                          self.fluence1Entry,
+                                          self.hwp1Entry,
+                                          self.newPointButton,
+                                          self.clearDataButton,
+                                          self.saveDataButton,
+                                          self.avgDisBox,
+                                          self.medianFilterBox,
+                                          self.avgDirLocEntry,
+                                          self.imageSetButton,
+                                          scanSweepSelection_button,
+                                          self.scanDsPosEntry,
+                                          self.scanDsWaitEntry,
+                                          self.scanFluenceEntry,
+                                          self.scanHwpWaitEntry,
+                                          self.batchSizeEntry,
+                                          self.scanDirLocEntry,
+                                          self.transCorrBox,
+                                          self.scanMedianFilterBox,
+                                          self.smartScanBox,
+                                          self.startScanButton,
+                                          add_roi_button,
+                                          self.startCoolingButton]
+    
+            # disable scan gui features and enable setup gui features
+            for obj in self.setup_disabled_ui_list:
+                obj.config(state=tk.DISABLED)
+            for obj in self.scan_disabled_ui_list:
+                obj.config(state=tk.NORMAL)
+         
+    
+        # Setup means to close data loop
+        def on_closing():            
+            # Get the current cooling power
+            cooling_power = self.camera.getCoolingPower()
+            
+            if self.runState == 2:
+                tk.messagebox.showwarning("Cannot Close", "Currently running UED scan, stop the scan before closing")
+                return 
+            
+            if cooling_power > 0:
+                tk.messagebox.showwarning("Cannot Close", "Cooler power is non-zero. Fully power down the cooler before closing.")
+                return
+
             if tk.messagebox.askokcancel("Quit", "Do you want to quit?"):
                 self.runState = 0
         
@@ -913,17 +963,34 @@ class SetupApp():
         self.thrScan = threading.Thread(target=self.scanLoop, args=(), kwargs={})
         self.thrScan.start() # Will run takeImageTestRepeat
         
+        # Start GUI
         self.root.protocol("WM_DELETE_WINDOW", on_closing)
+        
         self.root.mainloop()
         
-        # when mainloop exits, disconnect everything
         print('Disconnecting camera and delay stage')
         self.ds.disconnect() # disconnect from delay stage
         self.hwp.disconnect()
         #  Ending acquisition appropriately helps ensure that devices clean up
         #  properly and do not need to be power-cycled to maintain integrity.
         self.camera.disconnect() # disconnect from camera
-  
+        
+    def connect_devices(self):
+        # Initialize camera
+        self.camera = lab_instruments.AtikCamera()
+        self.exposure = 1 # time in s
+        
+        # take a sample image
+        self.collectImage()
+        self.displayImage = self.camImage # This can be different than the direct cam image if filters or averaging is applied.
+        self.h, self.w = self.camImage.shape
+
+        # Connect to the delay stage
+        self.ds = lab_instruments.DelayStage(com = 'COM3')
+        
+        # Connect to the half wave plate
+        self.hwp = lab_instruments.HalfWavePlate(com = 'COM4') # COM4 is pump, COM5 is heaterline
+    
     def camonclick(self,event):
         ax = self.camAx[0]
         # Find the location of the mouse click and update the crosshair variable to this value
@@ -1065,11 +1132,24 @@ class SetupApp():
             
             self.cursor_xycoord_label_string.set(f'(x, y) = ({self.mouse_x}, {self.mouse_y})')
             self.cursor_intensity_label_string.set(f'pixel value = {int(self.displayImage[self.mouse_y, self.mouse_x])}')
-            
+    
+    def updateLineProfilePlot(self):
+        # Put the data from the display image to the line profile
+        line_profile_data = data_analysis.getLineProfile(self.displayImage, (self.lineProfile_x1, self.lineProfile_y1), (self.lineProfile_x2, self.lineProfile_y2))
+        self.lineProfilePlot_h.set_ydata(line_profile_data)
+        if len(line_profile_data[line_profile_data!=0]) > 0:
+            self.camAx[1].set_ylim(min(line_profile_data[line_profile_data!=0])-1,max(line_profile_data)+1) # set the scales for us to see the data
+            self.camAx[1].set_yticks([min(line_profile_data[line_profile_data!=0]),(0.5*max(line_profile_data)+0.5*min(line_profile_data[line_profile_data!=0])),max(line_profile_data)])
+          
+    def collectImage(self):
+        self.collecting = True
+        self.camImage = self.camera.takeImage(self.exposure)
+        self.collecting = False
+    
     def saveImage(self):
         now = datetime.datetime.now()
         nowString = now.strftime("%Y_%m_%d-%H_%M_%S")
-        defaultFileName = nowString+'expo'+ str(self.camera.getExposure()) + '.tiff'
+        defaultFileName = nowString+'expo'+ str(self.exposure) + '.tiff'
         self.saveImageFileName = tk.filedialog.asksaveasfile(mode='w',initialfile=defaultFileName,defaultextension=".*",filetypes = [("image files", ".tiff")])
         
         # If image averaging is on, the type will be a 64 bit float. We convert to 32 bit float here so that imageJ can open the saved image file
@@ -1093,20 +1173,458 @@ class SetupApp():
             self.coolingOn = True
             self.camera.startCooler()
             self.startCoolingButton.config(text='Stop Cooler', bg="#00ff70", fg="black")
+         
+    def startScan(self):
+        self.appstate_label_string.set('State: Scanning')
+        self.appstate_label.config(bg='yellow')
+        # disable setup gui features and enable scan gui features
+        for obj in self.scan_disabled_ui_list:
+            obj.config(state=tk.DISABLED)
+        for obj in self.setup_disabled_ui_list:
+            obj.config(state=tk.NORMAL)
+            
+        self.roiSelection.set("line profile") # default value
         
-    def updateLineProfilePlot(self):
-        # Put the data from the display image to the line profile
-        line_profile_data = data_analysis.getLineProfile(self.displayImage, (self.lineProfile_x1, self.lineProfile_y1), (self.lineProfile_x2, self.lineProfile_y2))
-        self.lineProfilePlot_h.set_ydata(line_profile_data)
-        if len(line_profile_data[line_profile_data!=0]) > 0:
-            self.camAx[1].set_ylim(min(line_profile_data[line_profile_data!=0])-1,max(line_profile_data)+1) # set the scales for us to see the data
-            self.camAx[1].set_yticks([min(line_profile_data[line_profile_data!=0]),(0.5*max(line_profile_data)+0.5*min(line_profile_data[line_profile_data!=0])),max(line_profile_data)])
+        # Read the user entries
+        self.dsPositions = parsePosStr(str(self.scanDsPosEntry.get()))
+        self.dsWait = float(self.scanDsWaitEntry.get())
+        self.scansweepselection =  str(self.scanSweepSelection.get())
+        self.fluences = parsePosStr(str(self.scanFluenceEntry.get()))
+        self.hwpWait = float(self.scanHwpWaitEntry.get())
+        self.batchSize = int(self.batchSizeEntry.get())
+        self.translationCorrectionQ = bool(self.varTransCorr.get())
+        self.scanMedianFilterQ = bool(self.varScanMedianFilter.get())
+        self.smartScanQ = bool(self.varSmartScan.get())
+        
+        # Compute the array of hwp values from the fluences
+        self.hwp_arr = np.empty(len(self.fluences))
+        for i in range(len(self.hwp_arr)):
+            hwp_val = self.imalus(self.fluences[i]) 
+            if hwp_val == None:
+                print(f'WARNING! Fluence outside acceptable range: {self.fluences[i]}')
+            self.hwp_arr[i] = hwp_val
+        
+        # start run log
+        now = datetime.datetime.now()
+        self.runLog = f'scan app started at {now.strftime("%Y_%m_%d-%H_%M_%S")} \n'
+        # Log the current time
+        self.runLog += f'dataAcquisitionLoop started at {datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")} \n'
+        self.runLogFileName = f'runLog_{now.strftime("%Y_%m_%d-%H_%M_%S")}.txt'
+        
+        # Data type for saving images
+        self.image_dtype = np.float32
+        self.zeroImage = np.zeros(np.shape(self.camImage), dtype=self.image_dtype) # A zero image that can be used later to generate empty initial files
+        
+        # Variable that contains the moving batch average thread
+        self.thrBatchAverage = None 
+        
+        # Pause and stop variables
+        self.paused = False
+        self.gentleStop = False
+        self.hardStop = False
+        
+        # Make a string that records the formattted start time
+        self.t_startString = datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
+        
+        # Record the starting time
+        self.t_start = time.time()
+        
+        # Create intensity history arrays for data plots
+        self.roiScanData = np.zeros([1,len(self.dsPositions)]) # full record of intensity in the roi
+        self.roiScanData_weights = np.full([1,len(self.dsPositions)], False, dtype = bool) # site is either 0 or 1 depending on whether that data point has been collected yet
+        self.timeHistory = np.zeros([1,len(self.dsPositions)]) # coincident record of when data was taken
+        
+        # Update x-axis label for the scan # data plot
+        self.dataAx[1].set_xlabel('Scan #')
+        
+        # If translation correction is active, find the initial reference location for later comparison
+        self.tcorr_0 = np.zeros([len(self.rm),2]) # array that stores the reference positions for translation correction
+        self.tcorr = np.zeros([len(self.rm),2])
+        self.tcorr_log = np.zeros([1,2])
+        self.roi_total_area = 0
+        
+        for ri in range(len(self.rm)):
+            r = self.rm[ri]
+            # Get pixel data in the roi
+            roi_image = self.camImage[int(r.cy-r.h/2):int(r.cy+r.h/2),int(r.cx-r.w/2):int(r.cx+r.w/2)]
+            self.roi_total_area += roi_image.shape[0]*roi_image.shape[1]
+            if self.translationCorrectionQ:
+                popt, rms, self.guess_prms = tc.fitImageToGaussian(roi_image)
+                self.tcorr_0[ri, :] = popt[:2]
+        
+        # get directory entry
+        self.scanDir = str(self.scanDirLocEntry.get())
+        # If a directory is given, save scan data, otherwise don't save anything just plot results
+        if len(self.scanDir) == 0:
+            self.saveScanData = False
+        else:
+            self.saveScanData = True
+
+        
+        if self.saveScanData:
+            # Make sure scan directory isn't a previous scan's directory
+            while os.path.isdir(f'{self.scanDir}//average'):
+                print('Warning! scanDir has files in it, making a new scan dir')
+                self.scanDir = self.scanDir + '_new'
+                original_umask = os.umask(0)
+                os.makedirs(f'{self.scanDir}')
+                os.umask(original_umask)
+                print(f'New dir is {self.scanDir}')
+        
+            print(f'scanDir: {self.scanDir} \n')
+        
+            # Make the directory for storing the average images and the empty files
+            original_umask = os.umask(0)
+            os.makedirs(f'{self.scanDir}//average', 777) # Create a directory for the batch average files
+            os.umask(original_umask)
+            
+            # Write the metadata file
+            nowString = datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
+            scanParamsDict = { \
+                            'scanStartTime':nowString,\
+                            'exposure':str(self.exposure),\
+                            'dsPositions entry':str(self.scanDsPosEntry.get()),\
+                            'dsPositions_array':str(self.dsPositions),\
+                            'ds wait':str(self.dsWait),\
+                            'fluences entry':str(self.scanFluenceEntry.get()),\
+                            'hwp_array':str(self.hwp_arr),\
+                            'hwp wait':str(self.hwpWait),\
+                            'batchSize':str(self.batchSize),\
+                            'translationCorrection':str(self.translationCorrectionQ),\
+                            'medianFilterDuringScan':str(self.scanMedianFilterQ),\
+                            'scansweepselection':self.scansweepselection,\
+                            'directory':self.scanDir}
+            with open(f'{self.scanDir}//scanMetaData_{nowString}.txt','w') as smdf:
+                for key, value in scanParamsDict.items():
+                    smdf.write('%s:%s\n' % (key, value))
+                    
+            # Update the persistent settings file
+            psParamsDict = { \
+                'dsPositions':str(self.scanDsPosEntry.get()),\
+                'fluences':str(self.scanFluenceEntry.get()),\
+                'dsWait':str(self.dsWait),\
+                'hwpWait':str(self.hwpWait),\
+                'batchSize':str(self.batchSize),\
+                'scanSweepSelection':str(self.scanSweepSelection.get()),\
+                'tcq':str(self.translationCorrectionQ),\
+                'smfq':str(self.scanMedianFilterQ),\
+                'ssq':str(self.smartScanQ),\
+                'pump_malus_A':self.persistent_settings_dict['pump_malus_A'],\
+                'pump_malus_phi':self.persistent_settings_dict['pump_malus_phi'],\
+                'pump_malus_offset':self.persistent_settings_dict['pump_malus_offset']}
+            with open(f'persistent_settings.txt','w') as psf:
+                for key, value in psParamsDict.items():
+                    psf.write('%s:%s\n' % (key, value))
+        
+            # Create the files for the total average
+            for p in range(len(self.dsPositions)):
+                for f in range(len(self.fluences)):
+                    dsPos = self.dsPositions[p] # direction doesn't matter here; we just need the positions for the files names
+                    flu = self.fluences[f]
+                    dsPosString = '%.4f' % dsPos
+                    fluString = '%.4f' % flu
+                    tifffile.imwrite(f'{self.scanDir}//average//pos={dsPosString}_flu={fluString}.tiff',self.zeroImage)
+
+            # Create a meta data file for the total average folder, write a row for each delay stage position
+            with open(f'{self.scanDir}//average//averageMetaData.txt', 'w') as fileObj:
+                for p in range(len(self.dsPositions)):
+                    for f in range(len(self.fluences)):
+                        fileObj.write(f'pi = {p}, dsPos = {self.dsPositions[p]} mm, fi = {f}, fluence = {self.fluences[f]} Ko, weight = 0 \n')
+            
+        # Double array makes back and forth motion automatic
+        self.fluence_double_array = np.append(self.fluences,self.fluences[::-1])
+            
+        # Create the index variables for batch number and scan number
+        self.batch_number = -1
+        self.scan_number = -1
+            
+        # set the scan run state
+        self.runState = 2
     
-    def collectImage(self):
-        self.collecting = True
-        self.camImage = self.camera.takeImage(self.exposure)
-        self.collecting = False
+    def endScan(self, finalImage, finalScanNumber, makeDataPlots = True):
+        self.appstate_label_string.set('State: Setup')
+        self.appstate_label.config(bg="gray") 
+        # Save some things
+        if self.saveScanData:
+            np.savetxt(self.scanDir + '//' + 'roiScanData.csv',self.roiScanData,delimiter=',')
+            np.savetxt(self.scanDir + '//' + 'timeHistory.csv',self.timeHistory,delimiter=',')
         
+            if self.translationCorrectionQ:
+                # save the corrections log
+                np.savetxt(self.scanDir + '//' + f'tcorrLog_batch.csv',self.tcorr_log,delimiter=',')
+        
+            # Save the run log to a txt file
+            with open(self.scanDir + '//' + self.runLogFileName, "w") as text_file:
+                text_file.write(self.runLog)
+                
+            if makeDataPlots and len(self.roiScanData[0]) > 0:
+                # Save data plots
+                fig, axs = plt.subplots(1, 4)
+                
+                y00 = self.roiScanData.flatten()
+                t00 = self.timeHistory.flatten()
+                
+                if self.hardStop == True:
+                    t00 = np.delete(t00, y00 == 0)
+                    y00 = np.delete(y00, y00 == 0)
+                
+                sorted_indices = np.argsort(t00)
+                
+                t00_sorted = t00[sorted_indices]
+                y00_sorted = y00[sorted_indices]
+                
+                mean_y00 = np.mean(y00_sorted)
+                std_y00 = np.std(y00_sorted)
+                
+                fig.suptitle(f't0={self.t_startString}')
+                
+                axs[0].plot(t00_sorted,y00_sorted)
+                axs[0].set_xlabel('Lab Time (s)')
+
+                
+                deltaT = t00_sorted-np.roll(t00_sorted,1)
+                deltaT = deltaT[1:]
+                T = np.mean(deltaT)
+                deltaS = np.max(self.timeHistory)-np.min(self.timeHistory)
+                S = deltaS/(finalScanNumber+1)
+                N = len(y00_sorted)
+                yf = fft.fft(y00_sorted)
+                xf = fft.fftfreq(N, T)[:N//2]
+                axs[1].plot(xf, 2.0/N * np.abs(yf[0:N//2]),alpha=1,c='blue')
+                
+                axs[1].axvline(x=1/S,c='red',zorder=1)
+                axs[1].axvline(x=1/(2*S),c='green',zorder=1)
+                
+                axs[1].set_xscale('log')
+                axs[1].set_yscale('log')
+                
+                axs[1].set_xlabel('Freq (Hz)')
+                #axs[0,1].set_ylabel('FFT')
+                #axs[0,1].legend()
+                
+                
+                if self.roiScanData.shape[0] > 1:
+                    lttp_x = self.dsPositions
+                    lttp_y = np.average(self.roiScanData, weights = self.roiScanData_weights, axis = 0)
+                    lttp_yerr = stdev_weighted(self.roiScanData, weights = self.roiScanData_weights, axis = 0)/np.sqrt(self.roiScanData.shape[0])
+                else:
+                    lttp_x = self.dsPositions[self.roiScanData_weights[0, :]]
+                    lttp_y = self.roiScanData[0, self.roiScanData_weights[0, :]]
+                    lttp_yerr = np.zeros(len(lttp_y))
+                    
+                axs[2].errorbar(lttp_x, lttp_y, lttp_yerr, marker = 'o', color = 'green', elinewidth = 1, capsize = 5, linestyle = '') # scan intensity plot with error bars at 1 sigma
+                axs[2].set_xlabel('dsPos (mm)')
+            
+                axs[3].imshow(finalImage)
+                for r in self.rm:
+                    tl_x = r.cx - r.w/2
+                    tl_y = r.cy - r.h/2
+                    axs[3].add_patch(patches.Rectangle((tl_x, tl_y), r.w, r.h, linewidth=1, edgecolor='r', facecolor='none', alpha=0.8))
+                
+                axs[3].xaxis.set_tick_params(labelbottom=False)
+                axs[3].yaxis.set_tick_params(labelleft=False)
+                axs[3].set_xticks([])
+                axs[3].set_yticks([])
+                
+                plt.tight_layout()
+                fig.savefig(self.scanDir + '//' + 'roiFigure.pdf')
+                
+                if self.translationCorrectionQ:
+                    # Save a plot showing the translation corrections
+                    fig, axs = plt.subplots(2)
+                    if self.hardStop == True:
+                        t00_sorted = t00_sorted[0:len(self.tcorr_log[1:,0])]
+                    # ~ print(len(t00_sorted),len(self.tcorr_log[1:,0]))
+                    axs[0].plot(t00_sorted,self.tcorr_log[1:,0])
+                    axs[0].set_ylabel('X shift')
+                    axs[0].set_xlabel('Lab Time (s)')
+                    axs[1].plot(t00_sorted,self.tcorr_log[1:,1])
+                    axs[1].set_ylabel('Y shift')
+                    axs[1].set_xlabel('Lab Time (s)')
+                    fig.suptitle(f't0={self.t_startString}')
+                    
+                    plt.tight_layout()
+                    fig.savefig(self.scanDir + '//' + 'translationCorrectionFigure.pdf')
+        
+        # Update x-axis label for the data point # data plot
+        self.dataAx[1].set_xlabel('Data Point #')
+        
+        self.resetLongHistory = True # set the data plots to be cleared
+        
+        # reset buttons
+        self.hardStopButton.config(bg='white')
+        self.gentleStopButton.config(bg='white')
+        
+        # disable scan gui features and enable setup gui features
+        for obj in self.setup_disabled_ui_list:
+            obj.config(state=tk.DISABLED)
+        for obj in self.scan_disabled_ui_list:
+            obj.config(state=tk.NORMAL)
+            
+        
+        self.runState = 1 # set the run state back to the setup phase
+        
+    def scanProcessImage(self, image, pi, s, b, t_image):
+        bi_calc = s%self.batchSize
+        
+        if self.scanMedianFilterQ:
+            image = median_filter(image, size=3)
+        
+        # Update the ROI data plots
+        if len(self.rm) > 0:
+            if self.translationCorrectionQ:
+                # Loop through all the ROIS
+                for ri in range(len(self.rm)):
+                    r = self.rm[ri]
+                    roi_image = image[int(r.cy-r.h/2):int(r.cy+r.h/2),int(r.cx-r.w/2):int(r.cx+r.w/2)]
+                    popt, rms, self.guess_prms = tc.fitImageToGaussian(roi_image, prevFit = self.guess_prms)
+                    self.tcorr[ri, :] = popt[:2]
+                    
+                correction = np.mean(self.tcorr_0 - self.tcorr, axis = 0)
+                self.tcorr_log = np.append(self.tcorr_log, correction[None, :], axis=0)
+                image = scipy.ndimage.shift(image, correction[::-1], mode = 'grid-wrap') # Apply translation correction to the image with cylic boundaries.
+                
+            roi_pixel_sum = 0
+            for r in self.rm:
+                # Get pixel data in the roi
+                roi_image = np.array(image[int(r.cy-r.h/2):int(r.cy+r.h/2),int(r.cx-r.w/2):int(r.cx+r.w/2)],dtype='float64')                              
+                # get the sum inside all the rois and the roi total area, we will average with a normalization to area
+                roi_pixel_sum += np.sum(roi_image)
+                
+            if (s + 1) > self.roiScanData.shape[0]:
+                self.roiScanData = np.append(self.roiScanData,np.zeros([1,len(self.dsPositions)]),axis=0) # append a new scan row to the arrays
+                self.roiScanData_weights = np.append(self.roiScanData_weights,np.full([1,len(self.dsPositions)], False, dtype = bool),axis=0)
+                self.timeHistory = np.append(self.timeHistory,np.zeros([1,len(self.dsPositions)]),axis=0)
+            
+            self.roiScanData[s, pi] = roi_pixel_sum/self.roi_total_area
+            self.roiScanData_weights[s, pi] = True
+            self.timeHistory[s, pi] = t_image - self.t_start #SCAF
+            
+            
+            # live intensity plot (lip) of data points within current scan
+            lip_x = self.timeHistory[s, self.roiScanData_weights[s, :]] # Only plot those indices that correspond to points that have already been collected
+            lip_y = self.roiScanData[s, self.roiScanData_weights[s, :]]
+            lip_x = lip_x - min(lip_x)
+            indices = np.argsort(lip_x)
+            lip_x = lip_x[indices]
+            lip_y = lip_y[indices]
+            # set the data to the data plots
+            self.liveIntensityPlot.set_xdata(lip_x)
+            self.liveIntensityPlot.set_ydata(lip_y)
+            
+            # live time trace plot (lttp)
+            if self.roiScanData.shape[0] > 1:
+                lttp_y = np.average(self.roiScanData, weights = self.roiScanData_weights, axis = 0)
+                lttp_yerr = stdev_weighted(self.roiScanData, weights = self.roiScanData_weights, axis = 0)/np.sqrt(self.roiScanData.shape[0])
+                update_errorbar(self.avgIntensity_dsPosPlot, self.dsPositions, lttp_y, yerr = lttp_yerr)
+            else:
+                lttp_x = self.dsPositions[self.roiScanData_weights[0, :]]
+                lttp_y = self.roiScanData[0, self.roiScanData_weights[0, :]]
+                lttp_yerr = np.zeros(len(lttp_y))
+                update_errorbar(self.avgIntensity_dsPosPlot, lttp_x, lttp_y, yerr = lttp_yerr)
+            
+            # recalculate xlim and ylim for data figures
+            for ax in self.dataAx:
+                ax.relim()  # Recalculate limits based on data
+                ax.autoscale_view()  # Apply autoscaling
+            
+            # draw the data canvas, we don't blit with this because we actually need the plot labels to change with each new data point
+            self.datacanvas.draw()
+
+        ## Draw the figures on the canvas and the data canvas
+        
+        # cam canvas
+        self.camImageObj.set_data(image)
+        self.canvas.draw()
+        
+        #SCAF
+        if self.saveScanData:
+            # Record image process info in the batch meta data file
+            incrementBatchMetaDataWeight(fileDir=f'{self.scanDir}//batch{b}//batchMetaData.txt', pi = pi) 
+            
+            # Load the image corresponding to this position from the current batch, update the moving average, save
+            dsPosString = '%.4f' % self.dsPositions[pi]
+            imAvg = tifffile.imread(f'{self.scanDir}//batch{b}//pos={dsPosString}.tiff')
+            imAvg = np.array((image + bi_calc*imAvg)/(bi_calc+1), dtype=self.image_dtype) # moving average
+            tifffile.imwrite(f'{self.scanDir}//batch{b}//pos={dsPosString}.tiff',imAvg) # save the updated image
+    
+    def movingAverageBatch(self, b):
+        if self.saveScanData == False:
+            return
+            
+        # Get the fluence of this batch using the back and forth formula (maybe make this more robust later SCAF)
+        flu = self.fluence_double_array[b%len(self.fluence_double_array)]
+        fluString = '%.4f' % flu
+        fi = np.where(np.array(self.fluences) == flu)[0][0] # Get the fluence index
+        print(f'Computing moving average on batch {b}, fluence {fluString} Ko, fi = {fi}')
+        
+        for p in range(len(self.dsPositions)):
+            # ~ print(f'moving batch average on position index {p}')
+            dsPos = self.dsPositions[p]
+            dsPosString = '%.4f' % dsPos
+            
+            # Load the image from the b batch folder
+            imNew = tifffile.imread(f'{self.scanDir}//batch{b}//pos={dsPosString}.tiff') # Load the image corresponding to this position and the latest batch
+            # Load the image from the average folder
+            imAvg = tifffile.imread(f'{self.scanDir}//average//pos={dsPosString}_flu={fluString}.tiff') # Load the moving average image corresponding to this position and fluence
+            # Get the weight of the new image
+            wNew = readBatchMetaDataWeight(fileDir=f'{self.scanDir}//batch{b}//batchMetaData.txt', pi = p)
+            # get the weight of the average image
+            wAvg = readAverageMetaDataWeight(fileDir=f'{self.scanDir}//average//averageMetaData.txt', pi = p, fi = fi)
+            
+            # ~ print('wNew, wAvg',wNew, wAvg) #SCAF
+            # Compute the new average image
+            if wNew != 0 or wAvg != 0:
+                imFinal = np.array((wNew*imNew + wAvg*imAvg)/(wNew + wAvg), dtype=self.image_dtype) # compute moving average
+            else:
+                imFinal = imNew # If this is triggered, it means the scan was stopped before any photo was taken for this image
+            
+            # Upate the average image weight in the average metadata file
+            incrementAverageMetaDataWeight(fileDir=f'{self.scanDir}//average//averageMetaData.txt', pi = p, fi = fi, increment = wNew)
+            
+            # Save the updated image
+            tifffile.imwrite(f'{self.scanDir}//average//pos={dsPosString}_flu={fluString}.tiff', imFinal)
+            
+        now = datetime.datetime.now()
+        self.runLog += f'movingAverageBatch thread completed for b = {b} at {now.strftime("%Y_%m_%d-%H_%M_%S")} \n'
+    
+    def computePiList(self, s, probability = 0.25):
+        pi_array_init = np.array(range(len(self.dsPositions)))
+        
+        if self.scansweepselection == 'one direction':
+            return list(pi_array_init)
+        
+        if self.scansweepselection == 'back and forth':
+            if s%2 == 0:
+                pi_array_final = pi_array_init
+            else:
+                pi_array_final = pi_array_init[::-1]
+            return list(pi_array_final)
+            
+        if self.scansweepselection == 'full random':
+            np.random.shuffle(pi_array_init)
+            return list(pi_array_init)
+            
+        if self.scansweepselection == 'quasi random':
+            if s%2 == 0:
+                pi_list = list(pi_array_init)
+            else:
+                pi_list = list(pi_array_init[::-1])
+            
+            pi_list_final = []
+            
+            while len(pi_list) > 1:
+                for i in range(len(pi_list)):
+                    coinflip = np.random.choice([False, True], p=[1 - probability, probability])
+                    if coinflip:
+                        pi_list_final.append(pi_list.pop(i))
+                        break
+                        
+            # No need to run the random choice on the last element of pi_list
+            pi_list_final.append(pi_list.pop(0))
+                    
+            return pi_list_final
+      
     def scanLoop(self):
         processPrev = False
         newPointSwitch = False
@@ -1175,58 +1693,55 @@ class SetupApp():
                                 roiTotalArea += roiImage.shape[0]*roiImage.shape[1]
                                 
                         if roiTotalArea > 0:
-                            self.timeHistory.append(self.t1 - self.t0)
+                            self.dataTimes.append(self.t1 - self.t0)
                             self.intensityHistory.append(roiPixelSum/roiTotalArea)
                             self.avgIntensity[-1] = np.mean(self.intensityHistory)
                             self.stdIntensity[-1] = np.std(self.intensityHistory)/np.sqrt(len(self.intensityHistory))
                             
-                            self.dataAx[0].set_xlim([min(self.timeHistory)-0.1,max(self.timeHistory)+0.1])
-                            self.dataAx[0].set_ylim([min(self.intensityHistory)-0.1,max(self.intensityHistory)+0.1])
-                            self.dataAx[1].set_xlim([-1,len(self.avgIntensity)])
-                            self.dataAx[1].set_ylim([min(self.avgIntensity-self.stdIntensity)-0.1,max(self.avgIntensity+self.stdIntensity)+0.1])
                     
                     self.dataAx[0].set_title(f"N = {len(self.intensityHistory)}")
-                    self.liveIntensityPlot.set_xdata(self.timeHistory)
+                    self.liveIntensityPlot.set_xdata(self.dataTimes)
                     self.liveIntensityPlot.set_ydata(self.intensityHistory)
                     
-                    update_errorbar(self.avgIntensityPlot,range(len(self.avgIntensity)),self.avgIntensity,yerr=self.stdIntensity)
+                    update_errorbar(self.avgIntensityPlot, range(len(self.avgIntensity)), self.avgIntensity, yerr = self.stdIntensity)
+                    update_errorbar(self.avgIntensity_dsPosPlot, self.avgIntensity_dsPos, self.avgIntensity, yerr = self.stdIntensity)
                     
+                    # recalculate xlim and ylim for data figures
+                    for ax in self.dataAx:
+                        ax.relim()  # Recalculate limits based on data
+                        ax.autoscale_view()  # Apply autoscaling
+                        
                     # Update the figures
                     self.canvas.draw()
                     self.datacanvas.draw()
+
                 
                 if newPointSwitch:
+                    self.newPointButton.config(text='Continue',bg='green')
+                    # Freeze here until user is ready to move on
+                    while newPointSwitch and self.resetHistory and self.runState == 1:
+                        time.sleep(self.wait)
+                        self.t0 = time.time()
+                    
                     processPrev = False
                     self.intensityHistory = []
-                    self.timeHistory = []
+                    self.dataTimes = []
                     self.avgIntensity = np.append(self.avgIntensity,[0]) # Don't worry about the zeros, they are rewritten and don't through off the average or stdev
+                    self.avgIntensity_dsPos = np.append(self.avgIntensity_dsPos, [self.ds.getPos()])
                     self.stdIntensity = np.append(self.stdIntensity,[0])
                     
                     # Zero the display image (necessary for averaging but no reason not to just always do it)
                     self.displayImage = 0*self.displayImage
                     self.numAvgDis = 0
                 
-                    # Freeze here until user is ready to move on
-                    while newPointSwitch and self.resetHistory:
-                        time.sleep(self.wait)
-                        self.t0 = time.time()
                     newPointSwitch = False
                 else:
                     t_rem = 0 + 0.7*self.exposure - (time.time() - t_open) # amount of time remaining in exposure
-                    N = int(30*t_rem) # 30 frames per second
-                    if N >= 4:
-                        # Waits here while updating the progress bar
-                        spf = t_rem/N
-                        self.imProgBar['value'] = 100/N
-                        for n in range(N):
-                            self.imProgBar.step(100/N)
-                            time.sleep(spf)
-                    else:
-                        self.imProgBar['value'] = 100
-                    
-                    # Pause here to make sure that self.camImage has been updated with the new image
-                    if self.collecting:
-                        self.thrCamExp.join() # joins the exposure thread to stop here
+                    self.imProgBar['value'] = 0
+                    while self.collecting:
+                        if self.imProgBar['value'] < 100 - 100*self.wait/t_rem:
+                            self.imProgBar.step(100*self.wait/t_rem)
+                        time.sleep(self.wait)
                     
                     processPrev = True # Tell the data acquisition loop that there is an image that needs processing
     
@@ -1236,148 +1751,209 @@ class SetupApp():
                     self.resetLongHistory = False
                                     
                     self.intensityHistory = []
-                    self.timeHistory = []
+                    self.dataTimes = []
                     
                     # Zero the display image (necessary for averaging but no reason not to just always do it)
                     self.displayImage = 0*self.displayImage
                     self.numAvgDis = 0
                     
                     self.avgIntensity = np.array([0],dtype='float')
+                    self.avgIntensity_dsPos = np.array([self.ds.getPos()], dtype='float')
                     self.stdIntensity = np.array([0],dtype='float')
-            
             # Loop sequence for running the scan
             elif self.runState == 2:
-
-            
-        self.root.quit() # Close the prep GUI window when the scan is started
-            
-    def startScan(self):
-        now = datetime.datetime.now()
-        self.runLog = f'scan app started at {now.strftime("%Y_%m_%d-%H_%M_%S")} \n'
-        # Log the current time
-        self.runLog += f'dataAcquisitionLoop started at {datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")} \n'
-        self.runLogFileName = f'runLog_{now.strftime("%Y_%m_%d-%H_%M_%S")}.txt'
-        
-        self.scanDir = str(self.scanDirLocEntry.get())
-        
-        if not os.path.isdir(self.scanDir):
-            popupmsg('Please select a valid scan directory for storing data')
-            return
-        
-        # Make sure scan directory isn't a previous scan's directory
-        while os.path.isdir(f'{self.scanDir}//average'):
-            print('Warning! scanDir has files in it, making a new scan dir')
-            self.scanDir = self.scanDir + '_new'
-            original_umask = os.umask(0)
-            os.makedirs(f'{self.scanDir}')
-            os.umask(original_umask)
-            print(f'New dir is {self.scanDir}')
-        
-        print(f'scanDir: {self.scanDir} \n')
-        
-        # Read the user entries
-        self.dsPositions = parsePosStr(str(self.scanDsPosEntry.get()))
-        self.dsWait = float(self.scanDsWaitEntry.get())
-        self.scansweepselection =  str(self.scanSweepSelection.get())
-        self.fluences = parsePosStr(str(self.scanFluenceEntry.get()))
-        self.hwpWait = float(self.scanHwpWaitEntry.get())
-        self.batchSize = int(self.batchSizeEntry.get())
-        self.tcq = bool(self.varTransCorr.get())
-        self.smfq = bool(self.varScanMedianFilter.get())
-        self.ssq = bool(self.varSmartScan.get())
-        
-        # Compute the array of hwp values from the fluences
-        self.hwp_arr = np.empty(len(self.fluences))
-        for i in range(len(self.hwp_arr)):
-            hwp_val = self.imalus(self.fluences[i]) 
-            if hwp_val == None:
-                print(f'WARNING! Fluence outside acceptable range: {self.fluences[i]}')
-            self.hwp_arr[i] = hwp_val
-        
-        # Write the metadata file
-        nowString = datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
-        scanParamsDict = { \
-                        'scanStartTime':nowString,\
-                        'exposure':str(self.exposure),\
-                        'dsPositions entry':str(self.scanDsPosEntry.get()),\
-                        'dsPositions_array':str(self.dsPositions),\
-                        'ds wait':str(self.dsWait),\
-                        'fluences entry':str(self.scanFluenceEntry.get()),\
-                        'hwp_array':str(self.hwp_arr),\
-                        'hwp wait':str(self.hwpWait),\
-                        'batchSize':str(self.batchSize),\
-                        'translationCorrection':str(self.tcq),\
-                        'medianFilterDuringScan':str(self.smfq),\
-                        'scansweepselection':self.scansweepselection,\
-                        'directory':self.scanDir}
-        with open(f'{self.scanDir}//scanMetaData_{nowString}.txt','w') as smdf:
-            for key, value in scanParamsDict.items():
-                smdf.write('%s:%s\n' % (key, value))
+                t_lastImage = self.t_start # This variable will later be used to record when images finish
                 
-        # Update the persistent settings file
-        psParamsDict = { \
-            'dsPositions':str(self.scanDsPosEntry.get()),\
-            'fluences':str(self.scanFluenceEntry.get()),\
-            'dsWait':str(self.dsWait),\
-            'hwpWait':str(self.hwpWait),\
-            'batchSize':str(self.batchSize),\
-            'scanSweepSelection':str(self.scanSweepSelection.get()),\
-            'tcq':str(self.tcq),\
-            'smfq':str(self.smfq),\
-            'ssq':str(self.ssq),\
-            'pump_malus_A':self.persistent_settings_dict['pump_malus_A'],\
-            'pump_malus_phi':self.persistent_settings_dict['pump_malus_phi'],\
-            'pump_malus_offset':self.persistent_settings_dict['pump_malus_offset']}
-                            
-        with open(f'persistent_settings.txt','w') as psf:
-            for key, value in psParamsDict.items():
-                psf.write('%s:%s\n' % (key, value))
-        
-        # Data type for saving images
-        self.image_dtype = np.float32
-        
-        self.zeroImage = np.zeros(np.shape(self.camImage), dtype=self.image_dtype) # A zero image that can be used later to generate empty initial files
-        
-        # Make the directory for storing the average images and the empty files
-        original_umask = os.umask(0)
-        os.makedirs(f'{self.scanDir}//average', 777) # Create a directory for the batch average files
-        os.umask(original_umask)
-        
-        # Create the files for the total average
-        for p in range(len(self.dsPositions)):
-            for f in range(len(self.fluences)):
-                dsPos = self.dsPositions[p] # direction doesn't matter here; we just need the positions for the files names
-                flu = self.fluences[f]
-                dsPosString = '%.4f' % dsPos
-                fluString = '%.4f' % flu
-                tifffile.imwrite(f'{self.scanDir}//average//pos={dsPosString}_flu={fluString}.tiff',self.zeroImage)
-
-        self.thrBatchAverage = None # Variable that contains the moving batch average thread
-        
-        # Make a string that records the formattted start time
-        self.t_startString = datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
-        
-        # Record the exact starting time
-        self.t_start = time.time()
-        t_lastImage = self.t_start # This variable will later be used to record when images finish
-        
-        # Create a meta data file for the total average folder, write a row for each delay stage position
-        with open(f'{self.scanDir}//average//averageMetaData.txt', 'w') as fileObj:
-            for p in range(len(self.dsPositions)):
-                for f in range(len(self.fluences)):
-                    fileObj.write(f'pi = {p}, dsPos = {self.dsPositions[p]} mm, fi = {f}, fluence = {self.fluences[f]} Ko, weight = 0 \n')
-        
-        # Double array makes back and forth motion automatic
-        self.fluence_double_array = np.append(self.fluences,self.fluences[::-1])
-            
-        # set the scan run state
-        self.runState = 2
-  
-
-
-  
+                self.batch_number += 1 # Record that a new batch is being taken, note that b is initiated at a value of -1
+                self.batchNumber_label_string.set(f"Batch # = {self.batch_number}") # Write the current batch number to the gui
+                
+                # Get next fluence value
+                flu = self.fluence_double_array[self.batch_number%len(self.fluence_double_array)] # get the new fluence from the doubled over fluence array, it's doubled so that motion is back and forth
+                cfs = '%.2f' % flu
+                self.currentFluence_label_string.set(f'Fluence = {cfs} Ko')
+                
+                # If there is more than one fluence, then physically update fluence and wait for hwpWait many seconds so that temp can stabilize
+                if len(self.fluences) > 1:
+                    hwpPos = self.imalus(flu)
+                    print(f'moving to hwpPow = {hwpPos}, fluence = {flu}, batch # = {self.batch_number}')
+                    self.hwp.moveAbsolute(hwpPos) # Sends command to the HWP
+                    readHwpPos = self.hwp.getPos() # Read the half wave plate value back to compare to the send value
+                    chs = '%.2f' % readHwpPos
+                    self.currentHwpPos_label_string.set(f'HWP Angle = {chs} deg')
                     
+                    time.sleep(self.hwpWait)
+                    # Log current set fluence and the read hwp pos
+                    self.runLog += f'set fluence = {flu} Ko, set hwpPos = {hwpPos} deg, read hwpPos = {readHwpPos} deg\n'
+                
+                # Makes files and directories for new batch
+                if self.saveScanData:
+                    # Create a directory for the new batch files
+                    os.makedirs(f'{self.scanDir}//batch{self.batch_number}')
+                    
+                    # Create a batch meta data file, write a row for each delay stage position
+                    with open(f'{self.scanDir}//batch{self.batch_number}//batchMetaData.txt', 'w') as f:
+                        f.write(f'Experiment start time  = {self.t_startString}\n')
+                        f.write(f'batch {self.batch_number} started at {datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")} \n')
+                        f.write(f'batchSize = {self.batchSize}\n')
+                        f.write(f'fluence = {flu} Ko\n')
+                        if len(self.fluences) > 1:
+                            f.write(f'set HWP Pos = {hwpPos} deg\n')
+                            f.write(f'read HWP Pos = {readHwpPos} deg\n')
+                        for pi in range(len(self.dsPositions)):
+                            f.write(f'pi = {pi}, dsPos = {self.dsPositions[pi]} mm, weight = 0 \n')
+                            
+                    # Create the tiff files of the new batch
+                    for pi in range(len(self.dsPositions)):
+                        dsPos = self.dsPositions[pi] # direction doesn't matter here; we just need the positions for the files names
+                        dsPosString = '%.4f' % dsPos
+                        tifffile.imwrite(f'{self.scanDir}//batch{self.batch_number}//pos={dsPosString}.tiff', self.zeroImage)
+        
+                # Log batch start time
+                self.runLog += f'batch {self.batch_number} started at {datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")} \n'
+                
+                ### Start the new batch ###
+                for bi in range(self.batchSize):
+                    self.scan_number += 1 # Record that a new scan is being taken, note that s is inititated at a value of -1
+                    self.scanNumber_label_string.set(f"Scan # = {self.scan_number}") # Write the current scan number to the gui
+                
+                    # Log scan start time
+                    self.runLog += f'\t scan {self.scan_number} (bi = {bi}) started at {datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")} \n'
+                    
+                    # Get the position index list depending on scan sweep option
+                    piList = self.computePiList(self.scan_number)
+                    
+                    ### Start a new scan ###
+                    for p in range(len(self.dsPositions)):
+                        
+                        # Update camera temperature and cooling power labels
+                        cts = '%.2f' % self.camera.getTemp()
+                        self.temperature_label_string.set(f'Cam Temp = {cts} °C')
+                        ccps = '%.2f' % self.camera.getCoolingPower()
+                        self.coolingPower_label_string.set(f'Cooling Power = {ccps} (0-255)')
+                        
+                        # get current position and index
+                        pi = piList[p]
+                        dsPos = self.dsPositions[pi]
+                        
+                        # Move to the next ds pos
+                        self.ds.setPos(dsPos)
+                    
+                        # Give a wait for the motor time
+                        time.sleep(self.dsWait)
+                    
+                        # read back the delay stage position
+                        dsReadBack = self.ds.getPos()
+                        
+                        # Write the current ds pos to the gui
+                        dps = '%.2f' % dsReadBack
+                        self.currentDsPos_label_string.set(f"dsPos = {dps} mm")
+                        self.scanProgress_label_string.set(f'Scan Progress = {p+1}/{len(self.dsPositions)}')
+                    
+                        # Record the current ds pos and the read back pos in the run log
+                        self.runLog += f'\t \t Delay Stage Set: pi = {pi}, dsSet = {dsPos}, dsReadBack = {dsReadBack}| (t-t_start) =  {round(time.time()-self.t_start,2)} \n'
+                        
+                        # Start taking an image async, Method will update self.camImage
+                        self.thrCamExp = threading.Thread(target = self.collectImage, args=(), kwargs={})
+                        self.thrCamExp.start()  # begins async camera exposure
+                        t_open = time.time() # Moment exposure started
+                        
+                        # Process previous image (that is the one taken before the image currently being taken), skip initial
+                        if p > 0:
+                            self.scanProcessImage(imageData, pi_prev, self.scan_number, self.batch_number, t_lastImage)
+                        
+                        # Pause here to make sure that self.camImage has been updated with the new image
+                        t_rem = 0 + 0.7*self.exposure - (time.time() - t_open) # amount of time remaining in exposure
+                        self.imProgBar['value'] = 0
+                        while self.collecting:
+                            if self.imProgBar['value'] < 100 - 100*self.wait/t_rem:
+                                self.imProgBar.step(100*self.wait/t_rem)
+                            time.sleep(self.wait)
+                        
+                        # make a local copy of cam image and record parameters for which it was collected
+                        imageData, pi_prev = np.copy(self.camImage), pi
+                        
+                        # Compute the image rate
+                        deltaTString = '%.3f' % round(time.time()-t_lastImage,5)
+                        deltaETString = '%.3f' % round(time.time()- t_lastImage - self.exposure - self.dsWait, 5)
+                        self.camTitle = self.camAx[0].set_title(f"Image Rate =  {deltaTString} s (et = {deltaETString} s)")
+                        t_lastImage = time.time()
+                        
+                        # Before moving to next loop check hard stop and pause
+                        if self.hardStop:
+                            # Process the last image of the scan before hard stop
+                            self.scanProcessImage(imageData, pi_prev, self.scan_number, self.batch_number, t_lastImage) 
+                            
+                            # Make sure all extra threads are closed out
+                            while len(threading.enumerate()) > 2:
+                                time.sleep(self.wait)
+                                
+                            # Do the final batch average
+                            self.movingAverageBatch(self.batch_number)
+                            
+                            self.endScan(finalImage = imageData, finalScanNumber = self.scan_number)
+                            break
+                    
+                        while self.paused:
+                            time.sleep(self.wait) # block here if paused
+                    
+                    # check if in termination sequence
+                    if self.runState != 2:
+                        break
+                    
+                    # This point in the loop occurs when a scan has concluded
+                    self.scanProcessImage(imageData, pi_prev, self.scan_number, self.batch_number, t_lastImage) # Process the last image of the scan
+                    
+                    # Update the scan intensity plot
+                    update_errorbar(self.avgIntensityPlot, range(self.roiScanData.shape[0]), np.mean(self.roiScanData, axis = 1),\
+                                                         yerr = np.std(self.roiScanData, axis = 1)/np.sqrt(self.roiScanData.shape[1]))
+                    self.dataAx[1].relim()  # Recalculate limits based on data
+                    self.dataAx[1].autoscale_view()  # Apply autoscaling
+                    
+                    # Before moving on to a new scan, check whether a gentle stop call is active
+                    if self.gentleStop and not self.hardStop:
+                        # Make sure all extra threads are closed out
+                        while len(threading.enumerate()) > 2:
+                            time.sleep(self.wait)
+                            
+                        # Do the final batch average
+                        self.movingAverageBatch(self.batch_number)
+                        
+                        self.endScan(finalImage = imageData, finalScanNumber = self.scan_number)
+                        break
+                
+                # check if in termination sequence
+                if self.runState != 2:
+                    continue
+                
+                # This point in the loop occurs when a batch has concluded
+                # Make sure the previous batch moving average thread has concluded
+                if (self.thrBatchAverage != None) and (self.thrBatchAverage.is_alive()):
+                    print('Joining Batch Average Thread')
+                    self.thrBatchAverage.join()
+                    
+                # Start the batch moving average thread
+                self.thrBatchAverage = threading.Thread(target=self.movingAverageBatch, args=(self.batch_number,), kwargs={})
+                self.thrBatchAverage.start()
+                
+                if self.saveScanData:
+                    # We do a temporary save of the roiScanData and timeHistory
+                    np.savetxt(self.scanDir + '//' + 'roiScanData.csv',self.roiScanData,delimiter=',')
+                    np.savetxt(self.scanDir + '//' + 'timeHistory.csv',self.timeHistory,delimiter=',')
+                
+                    # Save the run log to a txt file
+                    with open(self.scanDir + '//' + self.runLogFileName, "w") as text_file:
+                        text_file.write(self.runLog)
+                    if len(self.runLog) > 1e6:
+                        now = datetime.datetime.now()
+                        self.runLog = f'log started at {now.strftime("%Y_%m_%d-%H_%M_%S")} \n'
+                        self.runLogFileName = f'runLog_{now.strftime("%Y_%m_%d-%H_%M_%S")}.txt'
+                    
+        self.root.quit() # Close the prep GUI window when the scan is started
+     
+    
 if __name__ == '__main__':
-    app = SetupApp()
+    # ~ app = SetupApp()
     # ~ app = ScanApp()
+    
+    app = GUI()
                

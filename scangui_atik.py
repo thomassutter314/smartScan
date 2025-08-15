@@ -61,6 +61,8 @@ import psutil
 osprocess = psutil.Process(os.getpid())
 
 import translationcorr as tc
+
+
 import lab_instruments
 import data_analysis
 
@@ -424,7 +426,6 @@ class SetupApp():
         self.coolingPower_label_string.set(f'Cooling Power = {ccps} (0-255)')
         self.coolingPower_label = tk.Label(master=self.controls,textvariable=self.coolingPower_label_string,bg=cntrlBg)
         
-        self.coolingOn = False # camera starts with the cooler off
         # Adding the camera controls
         self.startCoolingButton = tk.Button(
             master=self.controls,
@@ -433,6 +434,9 @@ class SetupApp():
             height=1,
             fg='black', bg='#adb0ac',
             command=self.toggleCooler)
+        
+        self.coolingOn = False
+        
         
         # exposure labels
         self.exposure_label_string = tk.StringVar()
@@ -1449,6 +1453,19 @@ class ScanApp():
         self.errorLog_label_string.set(f'Error Log: \n')
         self.errorLog_label = tk.Label(master=self.controls,textvariable=self.errorLog_label_string,bg=cntrlBg)
         
+        
+        # Cooler labels
+        self.temperature_label_string = tk.StringVar()
+        cts = '%.2f' % self.camera.getTemp()
+        self.temperature_label_string.set(f'Cam Temp = {cts} °C')
+        self.temperature_label = tk.Label(master=self.controls,textvariable=self.temperature_label_string,bg=cntrlBg)
+        
+        # cooling power label
+        self.coolingPower_label_string = tk.StringVar()
+        ccps = '%.2f' % self.camera.getCoolingPower()
+        self.coolingPower_label_string.set(f'Cooling Power = {ccps} (0-255)')
+        self.coolingPower_label = tk.Label(master=self.controls,textvariable=self.coolingPower_label_string,bg=cntrlBg)
+        
         # Pack everything on controls frame
         self.batchSize_label.pack(pady=padySep)
         self.scanNumber_label.pack(pady=padySep)
@@ -1460,6 +1477,8 @@ class ScanApp():
         self.gentleStopButton.pack(pady=padySep)
         self.hardStopButton.pack(pady=padySep)
         self.errorLog_label.pack(pady=padySep)
+        self.temperature_label.pack(pady=padySep)
+        self.coolingPower_label.pack(pady=padySep)
         
         # Build sliders for adjusting the brightness and contrast of the image
         ax_setVals = [plt.axes([0.15, 0.06, 0.5, 0.02]), plt.axes([0.15, 0.02, 0.5, 0.02])]
@@ -1628,6 +1647,14 @@ class ScanApp():
                 ### Start a new scan ###
                 for p in range(len(self.dsPositions)):
                     # ~ print(time.time(),' ',osprocess.memory_info().rss / 2 ** 20) # Print this to check for memory leaks
+                    
+                    # Update camera temperature and cooling power labels
+                    cts = '%.2f' % self.camera.getTemp()
+                    self.temperature_label_string.set(f'Cam Temp = {cts} °C')
+                    ccps = '%.2f' % self.camera.getCoolingPower()
+                    self.coolingPower_label_string.set(f'Cooling Power = {ccps} (0-255)')
+                    
+                    # get current position and index
                     pi = piList[p]
                     dsPos = self.dsPositions[pi]
                     
@@ -1882,8 +1909,27 @@ class ScanApp():
         self.hwp.disconnect()
         #  Ending acquisition appropriately helps ensure that devices clean up
         #  properly and do not need to be power-cycled to maintain integrity.
-
+        
+        # Turn off the camera cooling
+        self.camera.stopCooler()
+        
+        # Get the current cooling power
+        cooling_power = self.camera.getCoolingPower()
+        
+        # Wait until camera cooling is off before disconnecting the camera
+        while cooling_power > 0:
+            time.sleep(1)
+            cooling_power = self.camera.getCoolingPower()
+            # Update camera temperature and cooling power labels
+            cts = '%.2f' % self.camera.getTemp()
+            self.temperature_label_string.set(f'Cam Temp = {cts} °C')
+            ccps = '%.2f' % cooling_power
+            self.coolingPower_label_string.set(f'Cooling Power = {ccps} (0-255)')
+            print(cooling_power)
+        
         self.camera.disconnect() # disconnect from camera
+        
+        
         self.root.quit() # Close the gui window
                 
         # Save some things
@@ -1898,9 +1944,6 @@ class ScanApp():
         with open(self.scanDir + '//' + self.runLogFileName, "w") as text_file:
             text_file.write(self.runLog)
                 
-        # Disconnect from camera and clean up
-        # Disconnect from delay stage and clean up
-        
         if makeDataPlots:
             # Save data plots
             fig, axs = plt.subplots(2,3)
@@ -1994,8 +2037,8 @@ class ScanApp():
                 plt.tight_layout()
                 fig.savefig(self.scanDir + '//' + 'translationCorrectionFigure.pdf')
                 
-        # Close the scan GUI window
-        self.root.quit()
+        # ~ # Close the scan GUI window
+        # ~ self.root.quit()
                   
                     
 if __name__ == '__main__':

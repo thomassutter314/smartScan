@@ -104,9 +104,9 @@ def determineGuessParams(Z_ROI,X_ROI,Y_ROI,preliminaryScanNumber,verbose=False):
 
     #Determine guess for sigma_y
     X_indexClosest = findNearest(guessVal_x,X_ROI) # Finds the index of the curve closest to 2D guassian peak
-    NtenPercent = int(len(Z_ROI[X_indexClosest,:])*0.1)+1 # 10% of the number of values in this cross-section. +1 for safety
-    bottomVals = np.partition(Z_ROI[X_indexClosest,:],NtenPercent)[:NtenPercent] # The smallest 10% of the cross-section plot
-    topVals = np.partition(Z_ROI[X_indexClosest,:],-NtenPercent)[-NtenPercent:] # The largest 10% of the cross-section plot
+    NtenPercent = int(len(Z_ROI[:,X_indexClosest])*0.1)+1 # 10% of the number of values in this cross-section. +1 for safety
+    bottomVals = np.partition(Z_ROI[:,X_indexClosest],NtenPercent)[:NtenPercent] # The smallest 10% of the cross-section plot
+    topVals = np.partition(Z_ROI[:,X_indexClosest],-NtenPercent)[-NtenPercent:] # The largest 10% of the cross-section plot
     #print(topVals,"topVals")
     bottomVals_culled = nixOutliers(bottomVals,neverOutputEmpty=True) # Throws away statistical outliers. Returns [0] if input was empty
     topVals_culled = nixOutliers(topVals,neverOutputEmpty=True) # Throws away statistical outliers
@@ -117,7 +117,7 @@ def determineGuessParams(Z_ROI,X_ROI,Y_ROI,preliminaryScanNumber,verbose=False):
     #print(guessVal_amplitude_yscan,"guessVal_amplitude_yscan")
     #print("guessVal_amplitude_yscan",guessVal_amplitude_yscan)
     #print("guessVal_offset_yscan",guessVal_offset_yscan)
-    F_y = Z_ROI[X_indexClosest,:] - guessVal_offset_yscan # Subtracts away offset from the cross-section
+    F_y = Z_ROI[:,X_indexClosest] - guessVal_offset_yscan # Subtracts away offset from the cross-section
     mean_F_y, var_F_y = findSignalVariance(F_y)
     guessVal_sigma_y = np.sqrt(var_F_y) # Gets the guess for sigma from a numerical integral
 
@@ -236,7 +236,10 @@ def fitImageToGaussian(pixelData, preliminaryScanNumber = [20,20], returnGuessPa
     # flattened (ravelled) ordering of the data points.
 
     #Computes the best fit parameters, but the values are in terms of the rotated coordinate system
-    popt, pcov = opt.curve_fit(_gaussian, xdata, Z.ravel(), guess_prms,  bounds = bounds_prms)
+    try:
+        popt, pcov = opt.curve_fit(_gaussian, xdata, Z.ravel(), guess_prms,  bounds = bounds_prms)
+    except:
+        popt = guess_prms
 
     #popt = np.copy(popt_rotated)
 

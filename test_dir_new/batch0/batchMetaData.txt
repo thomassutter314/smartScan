@@ -1,0 +1,16 @@
+Experiment start time  = 2025_03_13-00_48_26
+batch 0 started at 2025_03_13-00_48_29 
+batchSize = 5
+fluence = 3.75 Ko
+set HWP Pos = 31.665102226971065 deg
+read HWP Pos = 31.665102226971065 deg
+pi = 0, dsPos = 1.0 mm, weight = 3
+pi = 1, dsPos = 2.0 mm, weight = 3
+pi = 2, dsPos = 3.0 mm, weight = 3
+pi = 3, dsPos = 4.0 mm, weight = 2
+pi = 4, dsPos = 5.0 mm, weight = 2
+pi = 5, dsPos = 6.0 mm, weight = 2
+pi = 6, dsPos = 7.0 mm, weight = 2
+pi = 7, dsPos = 8.0 mm, weight = 3
+pi = 8, dsPos = 9.0 mm, weight = 2
+pi = 9, dsPos = 10.0 mm, weight = 3

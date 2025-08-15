@@ -1,12 +1,12 @@
-dsPositions:(58.0, 58.5, 0.04)(58.5, 58.6, 0.01)(58.6, 58.9, 0.03)
-fluences:[4.00]
+dsPositions:(198,210,1)
+fluences:[5.0]
 dsWait:0.2
 hwpWait:3.0
-batchSize:5
+batchSize:2
 scanSweepSelection:back and forth
 tcq:False
 smfq:False
 ssq:False
-pump_malus_A:4.836
-pump_malus_phi:64.5
-pump_malus_offset:0.01
+pump_malus_A:5.066
+pump_malus_phi:70.7
+pump_malus_offset:0

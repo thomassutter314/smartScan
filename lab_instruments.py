@@ -317,7 +317,7 @@ class AtikCamera():
             
         self.cam.connect()
         
-        self.cam.set_binning(binX = 4, binY = 4)
+        self.cam.set_binning(binX = 8, binY = 8)
         
         api_version = self.cam.get_api_version()
         print("API version is: ", api_version)
@@ -355,7 +355,7 @@ class AtikCamera():
         
         while not self.cam.image_ready():
             # ~ print(self.cam.download_percent())
-            print(self.cam.camera_state(), type(self.cam.camera_state()))
+            # ~ print(self.cam.camera_state(), type(self.cam.camera_state()))
             time.sleep(0.1)
             
         image = self.cam.get_image()
@@ -534,6 +534,7 @@ class pseudoAtikCamera():
     
     # ~ @utils.func_timer    
     def takeImage(self, exposure_time):
+        time.sleep(exposure_time)
         image = 1000*np.random.random([100, 100])
         image = np.array(image, dtype = 'uint16')
         
@@ -582,7 +583,7 @@ if TESTING == True:
 
 
 HayearCamera = pseudoHayearCamera
-# ~ HalfWavePlate = pseudoHalfWavePlate
+HalfWavePlate = pseudoHalfWavePlate
 # ~ AtikCamera = pseudoAtikCamera
     
     

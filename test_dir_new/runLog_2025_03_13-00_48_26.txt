@@ -1,0 +1,33 @@
+scan app started at 2025_03_13-00_48_26 
+dataAcquisitionLoop started at 2025_03_13-00_48_26 
+set fluence = 3.75 Ko, set hwpPos = 31.665102226971065 deg, read hwpPos = 31.665102226971065 deg
+batch 0 started at 2025_03_13-00_48_29 
+	 scan 0 (bi = 0) started at 2025_03_13-00_48_29 
+	 	 Delay Stage Set: pi = 0, dsSet = 1.0, dsReadBack = 1.0| (t-t_start) =  3.67 
+	 	 Delay Stage Set: pi = 2, dsSet = 3.0, dsReadBack = 3.0| (t-t_start) =  4.93 
+	 	 Delay Stage Set: pi = 1, dsSet = 2.0, dsReadBack = 2.0| (t-t_start) =  6.18 
+	 	 Delay Stage Set: pi = 8, dsSet = 9.0, dsReadBack = 9.0| (t-t_start) =  7.42 
+	 	 Delay Stage Set: pi = 7, dsSet = 8.0, dsReadBack = 8.0| (t-t_start) =  8.66 
+	 	 Delay Stage Set: pi = 4, dsSet = 5.0, dsReadBack = 5.0| (t-t_start) =  9.93 
+	 	 Delay Stage Set: pi = 5, dsSet = 6.0, dsReadBack = 6.0| (t-t_start) =  11.17 
+	 	 Delay Stage Set: pi = 6, dsSet = 7.0, dsReadBack = 7.0| (t-t_start) =  12.43 
+	 	 Delay Stage Set: pi = 3, dsSet = 4.0, dsReadBack = 4.0| (t-t_start) =  13.68 
+	 	 Delay Stage Set: pi = 9, dsSet = 10.0, dsReadBack = 10.0| (t-t_start) =  14.94 
+	 scan 1 (bi = 1) started at 2025_03_13-00_48_42 
+	 	 Delay Stage Set: pi = 7, dsSet = 8.0, dsReadBack = 8.0| (t-t_start) =  16.25 
+	 	 Delay Stage Set: pi = 8, dsSet = 9.0, dsReadBack = 9.0| (t-t_start) =  17.5 
+	 	 Delay Stage Set: pi = 1, dsSet = 2.0, dsReadBack = 2.0| (t-t_start) =  18.75 
+	 	 Delay Stage Set: pi = 9, dsSet = 10.0, dsReadBack = 10.0| (t-t_start) =  19.96 
+	 	 Delay Stage Set: pi = 5, dsSet = 6.0, dsReadBack = 6.0| (t-t_start) =  21.2 
+	 	 Delay Stage Set: pi = 3, dsSet = 4.0, dsReadBack = 4.0| (t-t_start) =  22.42 
+	 	 Delay Stage Set: pi = 4, dsSet = 5.0, dsReadBack = 5.0| (t-t_start) =  23.66 
+	 	 Delay Stage Set: pi = 2, dsSet = 3.0, dsReadBack = 3.0| (t-t_start) =  24.92 
+	 	 Delay Stage Set: pi = 6, dsSet = 7.0, dsReadBack = 7.0| (t-t_start) =  26.15 
+	 	 Delay Stage Set: pi = 0, dsSet = 1.0, dsReadBack = 1.0| (t-t_start) =  27.38 
+	 scan 2 (bi = 2) started at 2025_03_13-00_48_54 
+	 	 Delay Stage Set: pi = 2, dsSet = 3.0, dsReadBack = 3.0| (t-t_start) =  28.7 
+	 	 Delay Stage Set: pi = 0, dsSet = 1.0, dsReadBack = 1.0| (t-t_start) =  29.95 
+	 	 Delay Stage Set: pi = 1, dsSet = 2.0, dsReadBack = 2.0| (t-t_start) =  31.2 
+	 	 Delay Stage Set: pi = 7, dsSet = 8.0, dsReadBack = 8.0| (t-t_start) =  32.44 
+	 	 Delay Stage Set: pi = 9, dsSet = 10.0, dsReadBack = 10.0| (t-t_start) =  33.69 
+movingAverageBatch thread completed for b = 0 at 2025_03_13-00_49_01 
