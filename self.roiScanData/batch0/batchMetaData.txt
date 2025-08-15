@@ -1,5 +1,5 @@
-Experiment start time  = 2025_08_15-14_30_33
-batch 0 started at 2025_08_15-14_30_34 
+Experiment start time  = 2025_08_15-14_25_01
+batch 0 started at 2025_08_15-14_25_01 
 batchSize = 2
 fluence = 5.0 Ko
 pi = 0, dsPos = 198.0 mm, weight = 2

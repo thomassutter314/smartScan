@@ -1,0 +1,16 @@
+scan app started at 2025_08_15-14_25_01 
+dataAcquisitionLoop started at 2025_08_15-14_25_01 
+batch 0 started at 2025_08_15-14_25_01 
+	 scan 0 (bi = 0) started at 2025_08_15-14_25_01 
+	 	 Delay Stage Set: pi = 0, dsSet = 198.0, dsReadBack = 198.0| (t-t_start) =  0.39 
+	 	 Delay Stage Set: pi = 1, dsSet = 199.0, dsReadBack = 199.0| (t-t_start) =  1.63 
+	 	 Delay Stage Set: pi = 2, dsSet = 200.0, dsReadBack = 200.0| (t-t_start) =  2.85 
+	 	 Delay Stage Set: pi = 3, dsSet = 201.0, dsReadBack = 201.0| (t-t_start) =  4.07 
+	 	 Delay Stage Set: pi = 4, dsSet = 202.0, dsReadBack = 202.0| (t-t_start) =  5.29 
+	 scan 1 (bi = 1) started at 2025_08_15-14_25_07 
+	 	 Delay Stage Set: pi = 4, dsSet = 202.0, dsReadBack = 202.0| (t-t_start) =  6.62 
+	 	 Delay Stage Set: pi = 3, dsSet = 201.0, dsReadBack = 201.0| (t-t_start) =  7.87 
+	 	 Delay Stage Set: pi = 2, dsSet = 200.0, dsReadBack = 200.0| (t-t_start) =  9.08 
+	 	 Delay Stage Set: pi = 1, dsSet = 199.0, dsReadBack = 199.0| (t-t_start) =  10.3 
+	 	 Delay Stage Set: pi = 0, dsSet = 198.0, dsReadBack = 198.0| (t-t_start) =  11.53 
+movingAverageBatch thread completed for b = 0 at 2025_08_15-14_25_14 

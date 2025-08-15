@@ -1357,7 +1357,7 @@ class GUI():
             with open(self.scanDir + '//' + self.runLogFileName, "w") as text_file:
                 text_file.write(self.runLog)
                 
-            if makeDataPlots and len(self.roiScanData[0]) > 0:
+            if makeDataPlots and len(self.roiScanData[0]) > 0 and len(self.rm) > 0:
                 # Save data plots
                 fig, axs = plt.subplots(1, 4)
                 

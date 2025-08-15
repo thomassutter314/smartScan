@@ -1,0 +1,13 @@
+scanStartTime:2025_08_15-14_25_01
+exposure:1
+dsPositions entry:(198,202,1)
+dsPositions_array:[198. 199. 200. 201. 202.]
+ds wait:0.2
+fluences entry:[5.0]
+hwp_array:[38.62702345]
+hwp wait:3.0
+batchSize:2
+translationCorrection:False
+medianFilterDuringScan:False
+scansweepselection:back and forth
+directory:self.roiScanData
